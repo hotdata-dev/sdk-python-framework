@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from hotdata_core_notebook.env import normalize_host, pick_workspace
-from hotdata_core_notebook.client import HotdataClient
+from hotdata_runtime.env import normalize_host, pick_workspace
+from hotdata_runtime.client import HotdataClient
 
 
 @pytest.mark.parametrize(
@@ -47,7 +47,7 @@ def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
     ]
     listing = SimpleNamespace(workspaces=items)
 
-    with patch("hotdata_core_notebook.env.WorkspacesApi") as Api:
+    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_2"
 
@@ -62,7 +62,7 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
     ]
     listing = SimpleNamespace(workspaces=items)
 
-    with patch("hotdata_core_notebook.env.WorkspacesApi") as Api:
+    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_1"
 

@@ -1,16 +1,19 @@
-# hotdata-core-notebook
+# hotdata-runtime
 
-Shared **Hotdata** client and domain types for notebook UIs (Marimo, Jupyter, etc.). UI frameworks depend on this package; they do not belong here.
+Shared runtime primitives for Hotdata integrations: workspace/session semantics, execution context, query state, run history, and replayable result handles. Framework packages (Marimo, Jupyter, Streamlit, LangGraph) depend on this package.
 
 Install:
 
 ```bash
-pip install hotdata-core-notebook
+uv pip install hotdata-runtime
+# or: pip install hotdata-runtime
 ```
 
-Development:
+Development (uses **uv**; creates `.venv/` in this repo):
 
 ```bash
-pip install -e ".[dev]"
-pytest
+uv sync --locked
+uv run pytest
 ```
+
+`uv.lock` is checked in so CI can run `uv sync --locked`. The default **dev** group (pytest) is enabled via `[tool.uv] default-groups`.

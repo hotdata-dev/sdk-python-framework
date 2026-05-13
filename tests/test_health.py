@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from hotdata.exceptions import ApiException
 
-from hotdata_core_notebook.client import HotdataClient
-from hotdata_core_notebook.health import workspace_health_lines
+from hotdata_runtime.client import HotdataClient
+from hotdata_runtime.health import workspace_health_lines
 
 
 def test_workspace_health_ok():

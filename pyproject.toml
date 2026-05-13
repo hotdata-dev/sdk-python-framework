@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hotdata-core-notebook"
+name = "hotdata-runtime"
 version = "0.1.0"
-description = "Hotdata API client and shared models for notebook integrations"
+description = "Workspace/session runtime primitives for Hotdata integrations"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -14,13 +14,16 @@ dependencies = [
   "pandas>=2.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "pytest>=8.0",
 ]
 
+[tool.uv]
+default-groups = ["dev"]
+
 [tool.hatch.build.targets.wheel]
-packages = ["hotdata_core_notebook"]
+packages = ["hotdata_runtime"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
