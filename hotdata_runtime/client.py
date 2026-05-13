@@ -15,14 +15,14 @@ from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
 from hotdata.models.table_info import TableInfo
 
-from hotdata_core_notebook.env import (
+from hotdata_runtime.env import (
     default_api_key,
     default_host,
     default_session_id,
     normalize_host,
     pick_workspace,
 )
-from hotdata_core_notebook.result import QueryResult
+from hotdata_runtime.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 
