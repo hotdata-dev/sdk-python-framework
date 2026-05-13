@@ -23,3 +23,5 @@ def workspace_health_lines(client: HotdataClient) -> tuple[bool, list[str]]:
         return True, lines
     except ApiException as e:
         return False, [e.reason or str(e)]
+    except Exception as e:
+        return False, [str(e)]

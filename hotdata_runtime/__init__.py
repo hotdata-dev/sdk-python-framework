@@ -3,7 +3,6 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from hotdata_runtime.client import HotdataClient, from_env
-from hotdata_runtime.health import workspace_health_lines
 from hotdata_runtime.env import (
     default_api_key,
     default_host,
@@ -13,6 +12,7 @@ from hotdata_runtime.env import (
     normalize_host,
     pick_workspace,
 )
+from hotdata_runtime.health import workspace_health_lines
 from hotdata_runtime.result import QueryResult
 
 try:

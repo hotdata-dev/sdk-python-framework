@@ -16,6 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+  "packaging>=23",
   "pytest>=8.0",
 ]
 
