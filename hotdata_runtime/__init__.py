@@ -11,6 +11,8 @@ from hotdata_runtime.env import (
     list_workspaces,
     normalize_host,
     pick_workspace,
+    resolve_workspace_selection,
+    WorkspaceSelection,
 )
 from hotdata_runtime.health import workspace_health_lines
 from hotdata_runtime.result import QueryResult
@@ -33,4 +35,6 @@ __all__ = [
     "list_workspaces",
     "normalize_host",
     "pick_workspace",
+    "resolve_workspace_selection",
+    "WorkspaceSelection",
 ]

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hotdata_runtime.env import normalize_host, pick_workspace
+from hotdata_runtime.env import normalize_host, pick_workspace, resolve_workspace_selection
 from hotdata_runtime.client import HotdataClient
 
 
@@ -28,6 +28,20 @@ def test_normalize_host(raw: str, expected: str):
 def test_pick_workspace_prefers_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
     assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_explicit"
+
+
+def test_resolve_workspace_selection_prefers_env_without_listing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
+    with patch("hotdata_runtime.env.list_workspaces") as listing:
+        resolved = resolve_workspace_selection(
+            "k", "https://api.hotdata.dev", None
+        )
+    listing.assert_not_called()
+    assert resolved.workspace_id == "ws_explicit"
+    assert resolved.source == "explicit_env"
+    assert resolved.workspaces == []
 
 
 def test_pick_workspace_prefers_workspace_id_env(monkeypatch: pytest.MonkeyPatch):
@@ -65,6 +79,28 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
     with patch("hotdata_runtime.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_1"
+
+
+def test_resolve_workspace_selection_returns_workspaces_and_source(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
+
+    items = [
+        SimpleNamespace(public_id="ws_1", active=False),
+        SimpleNamespace(public_id="ws_2", active=True),
+    ]
+    listing = SimpleNamespace(workspaces=items)
+
+    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+        Api.return_value.list_workspaces.return_value = listing
+        resolved = resolve_workspace_selection(
+            "k", "https://api.hotdata.dev", None
+        )
+    assert resolved.workspace_id == "ws_2"
+    assert resolved.source == "active"
+    assert resolved.workspaces == items
 
 
 def test_list_qualified_table_names_passes_connection_id():
