@@ -60,7 +60,7 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 
 ### Env Resolution
 
-- `default_api_key()` reads `HOTDATA_API_KEY` then `HOTDATA_TOKEN`.
+- `default_api_key()` reads `HOTDATA_API_KEY`.
 - `default_host()` reads `HOTDATA_API_URL` (default: `https://api.hotdata.dev`) and normalizes it.
 - `default_session_id()` reads `HOTDATA_SANDBOX`.
 - `pick_workspace()` prefers explicit env workspace, then active workspace, then first workspace.

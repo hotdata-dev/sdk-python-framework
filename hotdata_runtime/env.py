@@ -19,9 +19,7 @@ def normalize_host(url: str) -> str:
 
 
 def default_api_key() -> str:
-    return os.environ.get("HOTDATA_API_KEY", "") or os.environ.get(
-        "HOTDATA_TOKEN", ""
-    )
+    return os.environ.get("HOTDATA_API_KEY", "")
 
 
 def explicit_workspace_id() -> str | None:

@@ -78,9 +78,7 @@ class HotdataClient:
     def from_env(cls) -> HotdataClient:
         api_key = default_api_key()
         if not api_key:
-            raise RuntimeError(
-                "HOTDATA_API_KEY or HOTDATA_TOKEN must be set."
-            )
+            raise RuntimeError("HOTDATA_API_KEY must be set.")
         host = default_host()
         session = default_session_id()
         workspace_id = pick_workspace(api_key, host, session)
