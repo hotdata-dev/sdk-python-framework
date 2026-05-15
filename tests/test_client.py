@@ -184,3 +184,48 @@ def test_columns_for_qualified_prefers_explicit_connection_id():
     id_map.assert_not_called()
     assert cols == [col]
     assert fake_api.kwargs["connection_id"] == "conn_explicit"
+
+
+def test_list_recent_results_returns_normalized_summaries():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    listing = SimpleNamespace(
+        results=[
+            SimpleNamespace(id="res_1", status="ready", created_at="2026-01-01T00:00:00Z"),
+            SimpleNamespace(id="res_2", status="failed", created_at=None),
+        ]
+    )
+
+    class FakeResultsApi:
+        def list_results(self, *, limit: int, offset: int):
+            return listing
+
+    with patch.object(client, "results", return_value=FakeResultsApi()):
+        out = client.list_recent_results(limit=10, offset=2)
+    assert [r.result_id for r in out] == ["res_1", "res_2"]
+    assert out[0].status == "ready"
+    assert out[0].to_dict()["created_at"] == "2026-01-01T00:00:00Z"
+
+
+def test_list_run_history_returns_normalized_items():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    listing = SimpleNamespace(
+        query_runs=[
+            SimpleNamespace(
+                id="run_1",
+                status="succeeded",
+                created_at="2026-01-01T00:00:00Z",
+                execution_time_ms=7,
+                result_id="res_1",
+            ),
+        ]
+    )
+
+    class FakeRunsApi:
+        def list_query_runs(self, *, limit: int):
+            return listing
+
+    with patch.object(client, "query_runs", return_value=FakeRunsApi()):
+        out = client.list_run_history(limit=5)
+    assert [r.query_run_id for r in out] == ["run_1"]
+    assert out[0].execution_time_ms == 7
+    assert out[0].to_dict()["result_id"] == "res_1"

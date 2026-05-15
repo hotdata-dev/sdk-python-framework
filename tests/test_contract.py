@@ -23,6 +23,8 @@ def test_public_exports_contract():
         "normalize_host",
         "pick_workspace",
         "resolve_workspace_selection",
+        "ResultSummary",
+        "RunHistoryItem",
         "WorkspaceSelection",
     ]
 

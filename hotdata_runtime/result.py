@@ -20,6 +20,25 @@ class QueryResult:
     warning: str | None = None
     error_message: str | None = None
 
+    def to_records(
+        self,
+        *,
+        max_rows: int | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = self.rows if max_rows is None else self.rows[:max_rows]
+        return [dict(zip(self.columns, row)) for row in rows]
+
+    def metadata_dict(self) -> dict[str, Any]:
+        return {
+            "row_count": self.row_count,
+            "column_count": len(self.columns),
+            "result_id": self.result_id,
+            "query_run_id": self.query_run_id,
+            "execution_time_ms": self.execution_time_ms,
+            "warning": self.warning,
+            "error_message": self.error_message,
+        }
+
     def to_pandas(self):  # type: ignore[no-untyped-def]
         import pandas as pd
 

@@ -27,6 +27,8 @@ The supported import surface is:
 - `normalize_host`
 - `pick_workspace`
 - `resolve_workspace_selection`
+- `ResultSummary`
+- `RunHistoryItem`
 - `WorkspaceSelection`
 
 Adapters should import from `hotdata_runtime` and treat this surface as the stable API.
@@ -42,6 +44,8 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - `connections()` returns the connections API wrapper for adapter UI/status features.
 - `query_runs()` returns the query-runs API wrapper for adapter history views.
 - `results()` returns the results API wrapper for adapter result pickers.
+- `list_recent_results(...)` returns normalized `ResultSummary` entries.
+- `list_run_history(...)` returns normalized `RunHistoryItem` entries.
 - `list_qualified_table_names(...)` returns sorted fully qualified table names.
 - `columns_for_qualified(qualified, connection_id=...)` resolves table columns, and
   adapters should pass `connection_id` when known.
@@ -51,6 +55,8 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - Canonical tabular result model with `columns`, `rows`, and `row_count`.
 - Carries server identifiers and execution metadata when available.
 - `to_pandas()` converts to a DataFrame with stable column ordering.
+- `to_records(max_rows=...)` returns row dicts keyed by column names.
+- `metadata_dict()` returns normalized result metadata for adapter rendering.
 
 ### Env Resolution
 

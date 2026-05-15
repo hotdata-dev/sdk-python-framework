@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import time
 from typing import Any, Iterator
 
@@ -26,6 +27,28 @@ from hotdata_runtime.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 _RESULT_FAILURE = frozenset({"failed", "cancelled"})
+
+
+@dataclass(frozen=True)
+class ResultSummary:
+    result_id: str
+    status: str
+    created_at: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RunHistoryItem:
+    query_run_id: str
+    status: str
+    created_at: str | None
+    execution_time_ms: int | None
+    result_id: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class HotdataClient:
@@ -108,6 +131,39 @@ class HotdataClient:
 
     def results(self) -> ResultsApi:
         return self._results_api()
+
+    def list_recent_results(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ResultSummary]:
+        listing = self.results().list_results(limit=limit, offset=offset)
+        return [
+            ResultSummary(
+                result_id=r.id,
+                status=r.status,
+                created_at=r.created_at,
+            )
+            for r in listing.results
+        ]
+
+    def list_run_history(
+        self,
+        *,
+        limit: int = 20,
+    ) -> list[RunHistoryItem]:
+        listing = self.query_runs().list_query_runs(limit=limit)
+        return [
+            RunHistoryItem(
+                query_run_id=r.id,
+                status=r.status,
+                created_at=r.created_at,
+                execution_time_ms=r.execution_time_ms,
+                result_id=r.result_id,
+            )
+            for r in listing.query_runs
+        ]
 
     def iter_tables(
         self,
