@@ -39,6 +39,12 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - `from_env()` resolves runtime context from env vars and selected workspace.
 - `execute_sql(sql)` returns `QueryResult` or raises `RuntimeError`/`TimeoutError`.
 - `get_result(result_id)` returns a ready `QueryResult` and waits for readiness when needed.
+- `connections()` returns the connections API wrapper for adapter UI/status features.
+- `query_runs()` returns the query-runs API wrapper for adapter history views.
+- `results()` returns the results API wrapper for adapter result pickers.
+- `list_qualified_table_names(...)` returns sorted fully qualified table names.
+- `columns_for_qualified(qualified, connection_id=...)` resolves table columns, and
+  adapters should pass `connection_id` when known.
 
 ### `QueryResult`
 

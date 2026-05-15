@@ -81,6 +81,24 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_1"
 
 
+def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
+    items = [
+        SimpleNamespace(public_id="ws_1", active=False),
+        SimpleNamespace(public_id="ws_2", active=False),
+    ]
+    listing = SimpleNamespace(workspaces=items)
+    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+        Api.return_value.list_workspaces.return_value = listing
+        resolved = resolve_workspace_selection(
+            "k", "https://api.hotdata.dev", None
+        )
+    assert resolved.workspace_id == "ws_1"
+    assert resolved.source == "first"
+    assert resolved.workspaces == items
+
+
 def test_resolve_workspace_selection_returns_workspaces_and_source(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -121,3 +139,48 @@ def test_wait_result_ready_raises_on_cancelled():
     with patch.object(client, "_results_api", return_value=FakeResultsApi()):
         with pytest.raises(RuntimeError, match="cancelled"):
             client._wait_result_ready("res_1", timeout_s=0.1, interval_s=0)
+
+
+def test_connection_id_by_name_raises_on_duplicate_names():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    listing = SimpleNamespace(
+        connections=[
+            SimpleNamespace(name="warehouse", id="conn_1"),
+            SimpleNamespace(name="warehouse", id="conn_2"),
+        ]
+    )
+
+    class FakeConnectionsApi:
+        def list_connections(self):
+            return listing
+
+    with patch.object(client, "connections", return_value=FakeConnectionsApi()):
+        with pytest.raises(RuntimeError, match="Duplicate connection names"):
+            client.connection_id_by_name()
+
+
+def test_columns_for_qualified_prefers_explicit_connection_id():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    col = SimpleNamespace(name="a", data_type="INTEGER", nullable=True)
+    table = SimpleNamespace(columns=[col])
+    response = SimpleNamespace(tables=[table])
+
+    class FakeInformationSchemaApi:
+        def __init__(self):
+            self.kwargs = None
+
+        def information_schema(self, **kwargs):
+            self.kwargs = kwargs
+            return response
+
+    fake_api = FakeInformationSchemaApi()
+    with patch.object(client, "_information_schema", return_value=fake_api), patch.object(
+        client, "connection_id_by_name"
+    ) as id_map:
+        cols = client.columns_for_qualified(
+            "warehouse.public.orders",
+            connection_id="conn_explicit",
+        )
+    id_map.assert_not_called()
+    assert cols == [col]
+    assert fake_api.kwargs["connection_id"] == "conn_explicit"

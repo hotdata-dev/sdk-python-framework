@@ -144,9 +144,26 @@ class HotdataClient:
 
     def connection_id_by_name(self) -> dict[str, str]:
         listing = self.connections().list_connections()
-        return {c.name: c.id for c in listing.connections}
+        id_map: dict[str, str] = {}
+        duplicate_names: set[str] = set()
+        for c in listing.connections:
+            if c.name in id_map and id_map[c.name] != c.id:
+                duplicate_names.add(c.name)
+            id_map[c.name] = c.id
+        if duplicate_names:
+            names = ", ".join(sorted(duplicate_names))
+            raise RuntimeError(
+                f"Duplicate connection names found: {names}. "
+                "Use an explicit connection_id."
+            )
+        return id_map
 
-    def columns_for_qualified(self, qualified: str) -> list[TableInfo]:
+    def columns_for_qualified(
+        self,
+        qualified: str,
+        *,
+        connection_id: str | None = None,
+    ) -> list[TableInfo]:
         parts = qualified.split(".")
         if len(parts) < 3:
             raise ValueError(
@@ -157,10 +174,12 @@ class HotdataClient:
             parts[1],
             ".".join(parts[2:]),
         )
-        id_map = self.connection_id_by_name()
-        conn_id = id_map.get(conn_name)
-        if not conn_id:
-            raise KeyError(f"Unknown connection {conn_name!r}")
+        conn_id = connection_id
+        if conn_id is None:
+            id_map = self.connection_id_by_name()
+            conn_id = id_map.get(conn_name)
+            if not conn_id:
+                raise KeyError(f"Unknown connection {conn_name!r}")
         resp = self._information_schema().information_schema(
             connection_id=conn_id,
             var_schema=schema_name,
