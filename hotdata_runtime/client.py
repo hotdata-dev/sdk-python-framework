@@ -25,6 +25,7 @@ from hotdata_runtime.env import (
 from hotdata_runtime.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
+_RESULT_FAILURE = frozenset({"failed", "cancelled"})
 
 
 class HotdataClient:
@@ -206,9 +207,9 @@ class HotdataClient:
             last = results.get_result(result_id)
             if last.status == "ready":
                 return last
-            if last.status == "failed":
+            if last.status in _RESULT_FAILURE:
                 raise RuntimeError(
-                    last.error_message or "Result persistence failed"
+                    last.error_message or f"Result {last.status}"
                 )
             time.sleep(interval_s)
         raise TimeoutError(

@@ -109,3 +109,15 @@ def test_list_qualified_table_names_passes_connection_id():
         client.list_qualified_table_names(limit=5, connection_id="conn_a")
     it.assert_called_once()
     assert it.call_args.kwargs["connection_id"] == "conn_a"
+
+
+def test_wait_result_ready_raises_on_cancelled():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+
+    class FakeResultsApi:
+        def get_result(self, result_id: str):
+            return SimpleNamespace(status="cancelled", error_message=None)
+
+    with patch.object(client, "_results_api", return_value=FakeResultsApi()):
+        with pytest.raises(RuntimeError, match="cancelled"):
+            client._wait_result_ready("res_1", timeout_s=0.1, interval_s=0)
