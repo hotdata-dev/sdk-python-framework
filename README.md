@@ -11,6 +11,12 @@ uv pip install hotdata-runtime
 # or: pip install hotdata-runtime
 ```
 
+Example:
+
+```bash
+python examples/basic_usage.py
+```
+
 Development (uses **uv**; creates `.venv/` in this repo):
 
 ```bash
