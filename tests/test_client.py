@@ -221,11 +221,17 @@ def test_list_run_history_returns_normalized_items():
     )
 
     class FakeRunsApi:
-        def list_query_runs(self, *, limit: int):
+        def __init__(self):
+            self.kwargs = None
+
+        def list_query_runs(self, *, limit: int, offset: int):
+            self.kwargs = {"limit": limit, "offset": offset}
             return listing
 
-    with patch.object(client, "query_runs", return_value=FakeRunsApi()):
-        out = client.list_run_history(limit=5)
+    fake_runs = FakeRunsApi()
+    with patch.object(client, "query_runs", return_value=fake_runs):
+        out = client.list_run_history(limit=5, offset=3)
     assert [r.query_run_id for r in out] == ["run_1"]
     assert out[0].execution_time_ms == 7
     assert out[0].to_dict()["result_id"] == "res_1"
+    assert fake_runs.kwargs == {"limit": 5, "offset": 3}

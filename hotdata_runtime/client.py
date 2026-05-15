@@ -152,8 +152,9 @@ class HotdataClient:
         self,
         *,
         limit: int = 20,
+        offset: int = 0,
     ) -> list[RunHistoryItem]:
-        listing = self.query_runs().list_query_runs(limit=limit)
+        listing = self.query_runs().list_query_runs(limit=limit, offset=offset)
         return [
             RunHistoryItem(
                 query_run_id=r.id,
