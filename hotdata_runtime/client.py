@@ -4,6 +4,9 @@ from dataclasses import asdict, dataclass
 import time
 from typing import Any, Iterator
 
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
+from urllib3.exceptions import ProtocolError
+
 from hotdata import ApiClient, Configuration
 from hotdata.api.connections_api import ConnectionsApi
 from hotdata.api.information_schema_api import InformationSchemaApi
@@ -23,6 +26,7 @@ from hotdata_runtime.env import (
     normalize_host,
     pick_workspace,
 )
+from hotdata_runtime.http import default_http_retries
 from hotdata_runtime.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
@@ -71,6 +75,7 @@ class HotdataClient:
             api_key=api_key,
             workspace_id=workspace_id,
             session_id=session_id,
+            retries=default_http_retries(),
         )
         self._api = ApiClient(self._config)
 
@@ -150,9 +155,8 @@ class HotdataClient:
         self,
         *,
         limit: int = 20,
-        offset: int = 0,
     ) -> list[RunHistoryItem]:
-        listing = self.query_runs().list_query_runs(limit=limit, offset=offset)
+        listing = self.query_runs().list_query_runs(limit=limit)
         return [
             RunHistoryItem(
                 query_run_id=r.id,
@@ -292,6 +296,18 @@ class HotdataClient:
         )
 
     def execute_sql(self, sql: str) -> QueryResult:
+        last_err: BaseException | None = None
+        for attempt in range(3):
+            try:
+                return self._execute_sql_once(sql)
+            except (ProtocolError, ConnectionResetError, Urllib3HTTPError) as e:
+                last_err = e
+                if attempt == 2:
+                    raise
+                time.sleep(0.2 * (2**attempt))
+        raise last_err  # pragma: no cover
+
+    def _execute_sql_once(self, sql: str) -> QueryResult:
         q = self._query_api()
         try:
             raw = q.query(QueryRequest(sql=sql))
