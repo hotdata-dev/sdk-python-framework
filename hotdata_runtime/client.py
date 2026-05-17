@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import time
 from typing import Any, Iterator
+
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
+from urllib3.exceptions import ProtocolError
 
 from hotdata import ApiClient, Configuration
 from hotdata.api.connections_api import ConnectionsApi
@@ -22,9 +26,33 @@ from hotdata_runtime.env import (
     normalize_host,
     pick_workspace,
 )
+from hotdata_runtime.http import default_http_retries
 from hotdata_runtime.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
+_RESULT_FAILURE = frozenset({"failed", "cancelled"})
+
+
+@dataclass(frozen=True)
+class ResultSummary:
+    result_id: str
+    status: str
+    created_at: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RunHistoryItem:
+    query_run_id: str
+    status: str
+    created_at: str | None
+    execution_time_ms: int | None
+    result_id: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class HotdataClient:
@@ -47,6 +75,7 @@ class HotdataClient:
             api_key=api_key,
             workspace_id=workspace_id,
             session_id=session_id,
+            retries=default_http_retries(),
         )
         self._api = ApiClient(self._config)
 
@@ -54,9 +83,7 @@ class HotdataClient:
     def from_env(cls) -> HotdataClient:
         api_key = default_api_key()
         if not api_key:
-            raise RuntimeError(
-                "HOTDATA_API_KEY or HOTDATA_TOKEN must be set."
-            )
+            raise RuntimeError("HOTDATA_API_KEY must be set.")
         host = default_host()
         session = default_session_id()
         workspace_id = pick_workspace(api_key, host, session)
@@ -108,6 +135,39 @@ class HotdataClient:
     def results(self) -> ResultsApi:
         return self._results_api()
 
+    def list_recent_results(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ResultSummary]:
+        listing = self.results().list_results(limit=limit, offset=offset)
+        return [
+            ResultSummary(
+                result_id=r.id,
+                status=r.status,
+                created_at=r.created_at,
+            )
+            for r in listing.results
+        ]
+
+    def list_run_history(
+        self,
+        *,
+        limit: int = 20,
+    ) -> list[RunHistoryItem]:
+        listing = self.query_runs().list_query_runs(limit=limit)
+        return [
+            RunHistoryItem(
+                query_run_id=r.id,
+                status=r.status,
+                created_at=r.created_at,
+                execution_time_ms=r.execution_time_ms,
+                result_id=r.result_id,
+            )
+            for r in listing.query_runs
+        ]
+
     def iter_tables(
         self,
         *,
@@ -143,9 +203,26 @@ class HotdataClient:
 
     def connection_id_by_name(self) -> dict[str, str]:
         listing = self.connections().list_connections()
-        return {c.name: c.id for c in listing.connections}
+        id_map: dict[str, str] = {}
+        duplicate_names: set[str] = set()
+        for c in listing.connections:
+            if c.name in id_map and id_map[c.name] != c.id:
+                duplicate_names.add(c.name)
+            id_map[c.name] = c.id
+        if duplicate_names:
+            names = ", ".join(sorted(duplicate_names))
+            raise RuntimeError(
+                f"Duplicate connection names found: {names}. "
+                "Use an explicit connection_id."
+            )
+        return id_map
 
-    def columns_for_qualified(self, qualified: str) -> list[TableInfo]:
+    def columns_for_qualified(
+        self,
+        qualified: str,
+        *,
+        connection_id: str | None = None,
+    ) -> list[TableInfo]:
         parts = qualified.split(".")
         if len(parts) < 3:
             raise ValueError(
@@ -156,10 +233,12 @@ class HotdataClient:
             parts[1],
             ".".join(parts[2:]),
         )
-        id_map = self.connection_id_by_name()
-        conn_id = id_map.get(conn_name)
-        if not conn_id:
-            raise KeyError(f"Unknown connection {conn_name!r}")
+        conn_id = connection_id
+        if conn_id is None:
+            id_map = self.connection_id_by_name()
+            conn_id = id_map.get(conn_name)
+            if not conn_id:
+                raise KeyError(f"Unknown connection {conn_name!r}")
         resp = self._information_schema().information_schema(
             connection_id=conn_id,
             var_schema=schema_name,
@@ -206,9 +285,9 @@ class HotdataClient:
             last = results.get_result(result_id)
             if last.status == "ready":
                 return last
-            if last.status == "failed":
+            if last.status in _RESULT_FAILURE:
                 raise RuntimeError(
-                    last.error_message or "Result persistence failed"
+                    last.error_message or f"Result {last.status}"
                 )
             time.sleep(interval_s)
         raise TimeoutError(
@@ -217,6 +296,18 @@ class HotdataClient:
         )
 
     def execute_sql(self, sql: str) -> QueryResult:
+        last_err: BaseException | None = None
+        for attempt in range(3):
+            try:
+                return self._execute_sql_once(sql)
+            except (ProtocolError, ConnectionResetError, Urllib3HTTPError) as e:
+                last_err = e
+                if attempt == 2:
+                    raise
+                time.sleep(0.2 * (2**attempt))
+        raise last_err  # pragma: no cover
+
+    def _execute_sql_once(self, sql: str) -> QueryResult:
         q = self._query_api()
         try:
             raw = q.query(QueryRequest(sql=sql))

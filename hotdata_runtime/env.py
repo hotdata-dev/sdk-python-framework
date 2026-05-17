@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from hotdata import ApiClient, Configuration
@@ -18,15 +19,11 @@ def normalize_host(url: str) -> str:
 
 
 def default_api_key() -> str:
-    return os.environ.get("HOTDATA_API_KEY", "") or os.environ.get(
-        "HOTDATA_TOKEN", ""
-    )
+    return os.environ.get("HOTDATA_API_KEY", "")
 
 
 def explicit_workspace_id() -> str | None:
-    return os.environ.get("HOTDATA_WORKSPACE") or os.environ.get(
-        "HOTDATA_WORKSPACE_ID"
-    )
+    return os.environ.get("HOTDATA_WORKSPACE")
 
 
 def default_host() -> str:
@@ -50,13 +47,35 @@ def list_workspaces(api_key: str, host: str, session_id: str | None):
     return listing.workspaces
 
 
-def pick_workspace(api_key: str, host: str, session_id: str | None) -> str:
+@dataclass(frozen=True)
+class WorkspaceSelection:
+    workspace_id: str
+    source: str
+    workspaces: list
+
+
+def resolve_workspace_selection(
+    api_key: str, host: str, session_id: str | None
+) -> WorkspaceSelection:
     explicit = explicit_workspace_id()
     if explicit:
-        return explicit
+        return WorkspaceSelection(
+            workspace_id=explicit,
+            source="explicit_env",
+            workspaces=[],
+        )
     workspaces = list_workspaces(api_key, host, session_id)
     if not workspaces:
         raise RuntimeError("No Hotdata workspaces found for this API key.")
     active = [w for w in workspaces if w.active]
     chosen = active[0] if active else workspaces[0]
-    return chosen.public_id
+    return WorkspaceSelection(
+        workspace_id=chosen.public_id,
+        source="active" if active else "first",
+        workspaces=workspaces,
+    )
+
+
+def pick_workspace(api_key: str, host: str, session_id: str | None) -> str:
+    selection = resolve_workspace_selection(api_key, host, session_id)
+    return selection.workspace_id

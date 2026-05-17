@@ -2,7 +2,12 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from hotdata_runtime.client import HotdataClient, from_env
+from hotdata_runtime.client import (
+    HotdataClient,
+    ResultSummary,
+    RunHistoryItem,
+    from_env,
+)
 from hotdata_runtime.env import (
     default_api_key,
     default_host,
@@ -11,6 +16,8 @@ from hotdata_runtime.env import (
     list_workspaces,
     normalize_host,
     pick_workspace,
+    resolve_workspace_selection,
+    WorkspaceSelection,
 )
 from hotdata_runtime.health import workspace_health_lines
 from hotdata_runtime.result import QueryResult
@@ -33,4 +40,8 @@ __all__ = [
     "list_workspaces",
     "normalize_host",
     "pick_workspace",
+    "resolve_workspace_selection",
+    "ResultSummary",
+    "RunHistoryItem",
+    "WorkspaceSelection",
 ]
