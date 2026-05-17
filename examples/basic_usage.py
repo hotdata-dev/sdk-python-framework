@@ -15,7 +15,7 @@ def main() -> None:
         print(item.to_dict())
 
     print("run history:")
-    for item in client.list_run_history(limit=5, offset=0):
+    for item in client.list_run_history(limit=5):
         print(item.to_dict())
 
     client.close()
