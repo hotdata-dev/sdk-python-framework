@@ -45,7 +45,7 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - `query_runs()` returns the query-runs API wrapper for adapter history views.
 - `results()` returns the results API wrapper for adapter result pickers.
 - `list_recent_results(...)` returns normalized `ResultSummary` entries.
-- `list_run_history(limit=..., offset=...)` returns normalized `RunHistoryItem` entries.
+- `list_run_history(limit=...)` returns normalized `RunHistoryItem` entries.
 - `list_qualified_table_names(...)` returns sorted fully qualified table names.
 - `columns_for_qualified(qualified, connection_id=...)` resolves table columns, and
   adapters should pass `connection_id` when known.
