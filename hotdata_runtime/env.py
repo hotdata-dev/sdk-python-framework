@@ -23,9 +23,7 @@ def default_api_key() -> str:
 
 
 def explicit_workspace_id() -> str | None:
-    return os.environ.get("HOTDATA_WORKSPACE") or os.environ.get(
-        "HOTDATA_WORKSPACE_ID"
-    )
+    return os.environ.get("HOTDATA_WORKSPACE_ID")
 
 
 def default_host() -> str:

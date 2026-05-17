@@ -25,15 +25,15 @@ def test_normalize_host(raw: str, expected: str):
     assert normalize_host(raw) == expected
 
 
-def test_pick_workspace_prefers_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
+def test_pick_workspace_prefers_workspace_id_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("HOTDATA_WORKSPACE_ID", "ws_explicit")
     assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_explicit"
 
 
 def test_resolve_workspace_selection_prefers_env_without_listing(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
+    monkeypatch.setenv("HOTDATA_WORKSPACE_ID", "ws_explicit")
     with patch("hotdata_runtime.env.list_workspaces") as listing:
         resolved = resolve_workspace_selection(
             "k", "https://api.hotdata.dev", None
@@ -44,14 +44,8 @@ def test_resolve_workspace_selection_prefers_env_without_listing(
     assert resolved.workspaces == []
 
 
-def test_pick_workspace_prefers_workspace_id_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
-    monkeypatch.setenv("HOTDATA_WORKSPACE_ID", "ws_from_id")
-    assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_from_id"
-
 
 def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
     monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
 
     items = [
@@ -67,7 +61,6 @@ def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
     monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
 
     items = [
@@ -82,7 +75,6 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
     monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
     items = [
         SimpleNamespace(public_id="ws_1", active=False),
@@ -102,7 +94,6 @@ def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatc
 def test_resolve_workspace_selection_returns_workspaces_and_source(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
     monkeypatch.delenv("HOTDATA_WORKSPACE_ID", raising=False)
 
     items = [
@@ -224,14 +215,14 @@ def test_list_run_history_returns_normalized_items():
         def __init__(self):
             self.kwargs = None
 
-        def list_query_runs(self, *, limit: int, offset: int):
-            self.kwargs = {"limit": limit, "offset": offset}
+        def list_query_runs(self, *, limit: int):
+            self.kwargs = {"limit": limit}
             return listing
 
     fake_runs = FakeRunsApi()
     with patch.object(client, "query_runs", return_value=fake_runs):
-        out = client.list_run_history(limit=5, offset=3)
+        out = client.list_run_history(limit=5)
     assert [r.query_run_id for r in out] == ["run_1"]
     assert out[0].execution_time_ms == 7
     assert out[0].to_dict()["result_id"] == "res_1"
-    assert fake_runs.kwargs == {"limit": 5, "offset": 3}
+    assert fake_runs.kwargs == {"limit": 5}

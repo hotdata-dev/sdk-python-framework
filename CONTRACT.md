@@ -63,6 +63,7 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - `default_api_key()` reads `HOTDATA_API_KEY`.
 - `default_host()` reads `HOTDATA_API_URL` (default: `https://api.hotdata.dev`) and normalizes it.
 - `default_session_id()` reads `HOTDATA_SANDBOX`.
+- `explicit_workspace_id()` reads `HOTDATA_WORKSPACE_ID` (workspace public id).
 - `pick_workspace()` prefers explicit env workspace, then active workspace, then first workspace.
 - `resolve_workspace_selection()` is the canonical workspace selection algorithm. It returns `WorkspaceSelection` with selected workspace id, selection source, and discovered workspaces when auto-selected.
 
