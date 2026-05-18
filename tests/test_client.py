@@ -10,6 +10,10 @@ from hotdata_runtime.env import normalize_host, pick_workspace, resolve_workspac
 from hotdata_runtime.client import HotdataClient
 
 
+def _clear_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -44,9 +48,8 @@ def test_resolve_workspace_selection_prefers_env_without_listing(
     assert resolved.workspaces == []
 
 
-
 def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    _clear_workspace_env(monkeypatch)
 
     items = [
         SimpleNamespace(public_id="ws_1", active=False),
@@ -61,7 +64,7 @@ def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    _clear_workspace_env(monkeypatch)
 
     items = [
         SimpleNamespace(public_id="ws_1", active=False),
@@ -75,7 +78,7 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    _clear_workspace_env(monkeypatch)
     items = [
         SimpleNamespace(public_id="ws_1", active=False),
         SimpleNamespace(public_id="ws_2", active=False),
@@ -94,7 +97,7 @@ def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatc
 def test_resolve_workspace_selection_returns_workspaces_and_source(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.delenv("HOTDATA_WORKSPACE", raising=False)
+    _clear_workspace_env(monkeypatch)
 
     items = [
         SimpleNamespace(public_id="ws_1", active=False),
