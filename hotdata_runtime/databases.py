@@ -8,7 +8,6 @@ from typing import Any
 
 from hotdata.exceptions import ApiException
 from hotdata.models.create_connection_request import CreateConnectionRequest
-from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 
 MANAGED_SOURCE_TYPE = "managed"
 DEFAULT_SCHEMA = "public"
@@ -49,9 +48,6 @@ class LoadManagedTableResult:
 
 
 def is_parquet_path(path: str) -> bool:
-    lowered = path.lower()
-    if lowered.endswith(".parquet"):
-        return True
     return Path(path).suffix.lower() == ".parquet"
 
 
@@ -83,7 +79,7 @@ def create_connection_request(
     )
 
 
-def _managed_database(conn: Any) -> ManagedDatabase:
+def managed_database_from_connection(conn: Any) -> ManagedDatabase:
     return ManagedDatabase(
         id=str(conn.id),
         name=str(conn.name),
@@ -91,5 +87,5 @@ def _managed_database(conn: Any) -> ManagedDatabase:
     )
 
 
-def _api_error(exc: ApiException) -> str:
+def api_error_message(exc: ApiException) -> str:
     return exc.reason or str(exc)

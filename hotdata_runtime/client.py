@@ -34,10 +34,10 @@ from hotdata_runtime.databases import (
     ManagedDatabase,
     ManagedTable,
     MANAGED_SOURCE_TYPE,
-    _api_error,
-    _managed_database,
+    api_error_message,
     create_connection_request,
     is_parquet_path,
+    managed_database_from_connection,
 )
 from hotdata_runtime.http import default_http_retries
 from hotdata_runtime.result import QueryResult
@@ -154,7 +154,7 @@ class HotdataClient:
     def list_managed_databases(self) -> list[ManagedDatabase]:
         listing = self.connections().list_connections()
         return [
-            _managed_database(c)
+            managed_database_from_connection(c)
             for c in listing.connections
             if c.source_type == MANAGED_SOURCE_TYPE
         ]
@@ -173,7 +173,7 @@ class HotdataClient:
                 f"{match.name!r} is not a managed database "
                 f"(source_type: {match.source_type})"
             )
-        return _managed_database(match)
+        return managed_database_from_connection(match)
 
     def create_managed_database(
         self,
@@ -186,15 +186,15 @@ class HotdataClient:
         try:
             created = self.connections().create_connection(request)
         except ApiException as e:
-            raise RuntimeError(_api_error(e)) from e
-        return _managed_database(created)
+            raise RuntimeError(api_error_message(e)) from e
+        return managed_database_from_connection(created)
 
     def delete_managed_database(self, name_or_id: str) -> None:
         db = self.resolve_managed_database(name_or_id)
         try:
             self.connections().delete_connection(db.id)
         except ApiException as e:
-            raise RuntimeError(_api_error(e)) from e
+            raise RuntimeError(api_error_message(e)) from e
 
     def list_managed_tables(
         self,
@@ -232,7 +232,7 @@ class HotdataClient:
                 _content_type="application/octet-stream",
             )
         except ApiException as e:
-            raise RuntimeError(_api_error(e)) from e
+            raise RuntimeError(api_error_message(e)) from e
         return uploaded.id
 
     def load_managed_table(
@@ -247,7 +247,11 @@ class HotdataClient:
         if (upload_id is None) == (file is None):
             raise ValueError("Exactly one of upload_id or file is required")
         db = self.resolve_managed_database(database)
-        resolved_upload_id = upload_id or self.upload_parquet(file or "")
+        if upload_id is not None:
+            resolved_upload_id = upload_id
+        else:
+            assert file is not None
+            resolved_upload_id = self.upload_parquet(file)
         request = LoadManagedTableRequest(
             mode="replace",
             upload_id=resolved_upload_id,
@@ -260,7 +264,7 @@ class HotdataClient:
                 request,
             )
         except ApiException as e:
-            raise RuntimeError(_api_error(e)) from e
+            raise RuntimeError(api_error_message(e)) from e
         return LoadManagedTableResult(
             connection_id=loaded.connection_id,
             schema_name=loaded.schema_name,
@@ -280,7 +284,7 @@ class HotdataClient:
         try:
             self.connections().delete_managed_table(db.id, schema, table)
         except ApiException as e:
-            raise RuntimeError(_api_error(e)) from e
+            raise RuntimeError(api_error_message(e)) from e
 
     def list_recent_results(
         self,
