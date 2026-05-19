@@ -23,10 +23,6 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 
-# Resolve hotdata from a sibling checkout until v0.2.0 is on PyPI.
-[tool.uv.sources]
-hotdata = { path = "../sdk-python", editable = true }
-
 [tool.hatch.build.targets.wheel]
 packages = ["hotdata_runtime"]
 
