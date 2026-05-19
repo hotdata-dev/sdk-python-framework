@@ -44,17 +44,23 @@ wheels = [
 [[package]]
 name = "hotdata"
 version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../sdk-python" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dateutil" },
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/a2/7e997581dc23fca35330c355cd433135c4d18cc5506fb77fb35fd0180e97/hotdata-0.1.0.tar.gz", hash = "sha256:6795ff7381fb8f2f258ee3f0c31f9b1ba2f5908728c51fa399840fdf603acc46", size = 97691, upload-time = "2026-04-25T17:57:00.102Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/21/e04ca377e7e3db50215bf207867ef02a56af11f61022390b7689e6ff2db3/hotdata-0.1.0-py3-none-any.whl", hash = "sha256:304f46d7c7ed5b586a9102684ef42e45972955dfb66a492c5e0b016e8bc545fa", size = 242376, upload-time = "2026-04-25T17:56:58.126Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "pyarrow", marker = "extra == 'arrow'", specifier = ">=14" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "python-dateutil", specifier = ">=2.8.2" },
+    { name = "typing-extensions", specifier = ">=4.7.1" },
+    { name = "urllib3", specifier = ">=2.1.0,<3.0.0" },
 ]
+provides-extras = ["arrow"]
 
 [[package]]
 name = "hotdata-runtime"
@@ -74,7 +80,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hotdata", specifier = ">=0.1.0" },
+    { name = "hotdata", editable = "../sdk-python" },
     { name = "pandas", specifier = ">=2.0" },
 ]
 

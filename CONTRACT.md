@@ -30,6 +30,14 @@ The supported import surface is:
 - `ResultSummary`
 - `RunHistoryItem`
 - `WorkspaceSelection`
+- `ManagedDatabase`
+- `ManagedTable`
+- `LoadManagedTableResult`
+- `MANAGED_SOURCE_TYPE`
+- `DEFAULT_SCHEMA`
+- `build_managed_config`
+- `create_connection_request`
+- `is_parquet_path`
 
 Adapters should import from `hotdata_runtime` and treat this surface as the stable API.
 
@@ -49,6 +57,15 @@ Adapters should import from `hotdata_runtime` and treat this surface as the stab
 - `list_qualified_table_names(...)` returns sorted fully qualified table names.
 - `columns_for_qualified(qualified, connection_id=...)` resolves table columns, and
   adapters should pass `connection_id` when known.
+- `uploads()` returns the uploads API wrapper for parquet staging.
+- `list_managed_databases()` returns managed-catalog connections (`source_type: managed`).
+- `resolve_managed_database(name_or_id)` resolves a managed database by name or id.
+- `create_managed_database(name, schema=..., tables=...)` creates a managed database and optionally declares tables up front.
+- `delete_managed_database(name_or_id)` deletes a managed database connection.
+- `list_managed_tables(database, schema=...)` lists tables in a managed database.
+- `upload_parquet(path)` uploads a local parquet file and returns an upload id.
+- `load_managed_table(database, table, schema=..., upload_id=..., file=...)` publishes parquet data into a declared managed table.
+- `delete_managed_table(database, table, schema=...)` deletes a managed table.
 
 ### `QueryResult`
 

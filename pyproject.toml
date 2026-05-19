@@ -2,6 +2,9 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project]
 name = "hotdata-runtime"
 version = "0.1.0"
@@ -10,7 +13,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-  "hotdata>=0.1.0",
+  "hotdata @ git+https://github.com/hotdata-dev/sdk-python.git",
   "pandas>=2.0",
 ]
 
@@ -22,6 +25,9 @@ dev = [
 
 [tool.uv]
 default-groups = ["dev"]
+
+[tool.uv.sources]
+hotdata = { path = "../sdk-python", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["hotdata_runtime"]
