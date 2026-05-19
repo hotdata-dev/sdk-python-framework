@@ -43,7 +43,7 @@ wheels = [
 
 [[package]]
 name = "hotdata"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "../sdk-python" }
 dependencies = [
     { name = "pydantic" },
@@ -64,7 +64,7 @@ provides-extras = ["arrow"]
 
 [[package]]
 name = "hotdata-runtime"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "hotdata" },
