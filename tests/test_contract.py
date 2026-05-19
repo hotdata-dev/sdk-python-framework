@@ -11,8 +11,16 @@ from hotdata_runtime.result import QueryResult
 def test_public_exports_contract():
     assert hr.__all__ == [
         "__version__",
+        "DEFAULT_SCHEMA",
         "HotdataClient",
+        "LoadManagedTableResult",
+        "MANAGED_SOURCE_TYPE",
+        "ManagedDatabase",
+        "ManagedTable",
         "QueryResult",
+        "build_managed_config",
+        "create_connection_request",
+        "is_parquet_path",
         "workspace_health_lines",
         "default_api_key",
         "default_host",

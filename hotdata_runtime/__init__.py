@@ -8,6 +8,16 @@ from hotdata_runtime.client import (
     RunHistoryItem,
     from_env,
 )
+from hotdata_runtime.databases import (
+    DEFAULT_SCHEMA,
+    LoadManagedTableResult,
+    ManagedDatabase,
+    ManagedTable,
+    MANAGED_SOURCE_TYPE,
+    build_managed_config,
+    create_connection_request,
+    is_parquet_path,
+)
 from hotdata_runtime.env import (
     default_api_key,
     default_host,
@@ -29,8 +39,16 @@ except PackageNotFoundError:
 
 __all__ = [
     "__version__",
+    "DEFAULT_SCHEMA",
     "HotdataClient",
+    "LoadManagedTableResult",
+    "MANAGED_SOURCE_TYPE",
+    "ManagedDatabase",
+    "ManagedTable",
     "QueryResult",
+    "build_managed_config",
+    "create_connection_request",
+    "is_parquet_path",
     "workspace_health_lines",
     "default_api_key",
     "default_host",

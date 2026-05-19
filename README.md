@@ -13,6 +13,7 @@ Runtime boundary and guarantees are defined in `CONTRACT.md`.
 - **SQL execution helper** — run SQL through `POST /v1/query`, poll async query runs when needed, and return a `QueryResult`.
 - **Result utilities** — convert query results to records, pandas DataFrames, or metadata dictionaries for adapter display layers.
 - **History helpers** — list recent results and query run history with normalized dataclasses.
+- **Managed databases** — create Hotdata-owned catalogs, declare tables, upload parquet, and load managed tables (mirrors `hotdata databases` in the CLI).
 - **Health helpers** — build compact API/workspace health summaries for UI integrations.
 
 Install:
