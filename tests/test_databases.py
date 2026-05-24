@@ -8,9 +8,8 @@ import pytest
 from hotdata.exceptions import ApiException
 from hotdata_runtime.client import HotdataClient
 from hotdata_runtime.databases import (
-    build_managed_config,
-    create_connection_request,
     is_parquet_path,
+    managed_database_from_detail,
 )
 
 
@@ -18,28 +17,12 @@ def _client() -> HotdataClient:
     return HotdataClient("k", "ws", host="https://api.hotdata.dev")
 
 
-def test_build_managed_config_empty_without_tables():
-    assert build_managed_config("public", []) == {}
-
-
-def test_build_managed_config_declares_tables():
-    cfg = build_managed_config("public", ["orders", "customers"])
-    assert cfg == {
-        "schemas": [
-            {
-                "name": "public",
-                "tables": [{"name": "orders"}, {"name": "customers"}],
-            }
-        ]
-    }
-
-
-def test_create_connection_request_uses_managed_source_type():
-    req = create_connection_request("sales", schema="public", tables=["orders"])
-    assert req.name == "sales"
-    assert req.source_type == "managed"
-    assert req.skip_discovery is True
-    assert req.config["schemas"][0]["tables"][0]["name"] == "orders"
+def _detail(id="db_1", description="sales", default_connection_id="conn_1"):
+    return SimpleNamespace(
+        id=id,
+        description=description,
+        default_connection_id=default_connection_id,
+    )
 
 
 @pytest.mark.parametrize(
@@ -54,64 +37,94 @@ def test_is_parquet_path(path: str, expected: bool):
     assert is_parquet_path(path) is expected
 
 
-def test_list_managed_databases_filters_managed_only():
+def test_managed_database_from_detail():
+    db = managed_database_from_detail(_detail())
+    assert db.id == "db_1"
+    assert db.description == "sales"
+    assert db.default_connection_id == "conn_1"
+
+
+def test_list_managed_databases_returns_all():
     client = _client()
-    listing = SimpleNamespace(
-        connections=[
-            SimpleNamespace(id="c1", name="sales", source_type="managed"),
-            SimpleNamespace(id="c2", name="warehouse", source_type="postgres"),
-        ]
-    )
-    with patch.object(client, "connections") as connections:
-        connections.return_value.list_connections.return_value = listing
-        dbs = client.list_managed_databases()
-    assert [db.name for db in dbs] == ["sales"]
+    summary = SimpleNamespace(id="db_1")
+    detail = _detail()
+    listing = SimpleNamespace(databases=[summary])
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.list_databases.return_value = listing
+        dbs.return_value.get_database.return_value = detail
+        result = client.list_managed_databases()
+    assert len(result) == 1
+    assert result[0].id == "db_1"
+    assert result[0].description == "sales"
 
 
-def test_resolve_managed_database_by_name_and_id():
+def test_list_managed_databases_skips_failed_gets():
     client = _client()
-    listing = SimpleNamespace(
-        connections=[
-            SimpleNamespace(id="conn_abc", name="sales", source_type="managed"),
+    summaries = [SimpleNamespace(id="db_1"), SimpleNamespace(id="db_2")]
+    detail = _detail(id="db_2", description="warehouse", default_connection_id="conn_2")
+    listing = SimpleNamespace(databases=summaries)
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.list_databases.return_value = listing
+        dbs.return_value.get_database.side_effect = [
+            ApiException(status=404, reason="not found"),
+            detail,
         ]
-    )
-    with patch.object(client, "connections") as connections:
-        connections.return_value.list_connections.return_value = listing
-        by_name = client.resolve_managed_database("sales")
-        by_id = client.resolve_managed_database("conn_abc")
-    assert by_name.id == "conn_abc"
-    assert by_id.name == "sales"
+        result = client.list_managed_databases()
+    assert len(result) == 1
+    assert result[0].id == "db_2"
 
 
-def test_resolve_managed_database_rejects_non_managed():
+def test_resolve_managed_database_by_id():
     client = _client()
-    listing = SimpleNamespace(
-        connections=[
-            SimpleNamespace(id="c1", name="warehouse", source_type="postgres"),
+    detail = _detail()
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.get_database.return_value = detail
+        db = client.resolve_managed_database("db_1")
+    assert db.id == "db_1"
+    assert db.default_connection_id == "conn_1"
+
+
+def test_resolve_managed_database_by_description():
+    client = _client()
+    summary = SimpleNamespace(id="db_1", description="sales")
+    listing = SimpleNamespace(databases=[summary])
+    detail = _detail()
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.get_database.side_effect = [
+            ApiException(status=404, reason="not found"),
+            detail,
         ]
-    )
-    with patch.object(client, "connections") as connections:
-        connections.return_value.list_connections.return_value = listing
-        with pytest.raises(ValueError, match="not a managed database"):
-            client.resolve_managed_database("warehouse")
+        dbs.return_value.list_databases.return_value = listing
+        db = client.resolve_managed_database("sales")
+    assert db.id == "db_1"
+
+
+def test_resolve_managed_database_not_found():
+    client = _client()
+    listing = SimpleNamespace(databases=[])
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.get_database.side_effect = ApiException(status=404, reason="not found")
+        dbs.return_value.list_databases.return_value = listing
+        with pytest.raises(KeyError, match="no-such"):
+            client.resolve_managed_database("no-such")
 
 
 def test_create_managed_database_returns_summary():
     client = _client()
-    created = SimpleNamespace(id="conn_new", name="mydb", source_type="managed")
-    with patch.object(client, "connections") as connections:
-        connections.return_value.create_connection.return_value = created
+    created = _detail(id="db_new", description="mydb", default_connection_id="conn_new")
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.create_database.return_value = created
         db = client.create_managed_database("mydb", tables=["orders"])
-    assert db.id == "conn_new"
-    assert db.name == "mydb"
-    req = connections.return_value.create_connection.call_args.args[0]
-    assert req.config["schemas"][0]["tables"][0]["name"] == "orders"
+    assert db.id == "db_new"
+    assert db.description == "mydb"
+    req = dbs.return_value.create_database.call_args.args[0]
+    assert req.schemas[0].tables[0].name == "orders"
 
 
 def test_create_managed_database_wraps_api_errors():
     client = _client()
-    with patch.object(client, "connections") as connections:
-        connections.return_value.create_connection.side_effect = ApiException(
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.create_database.side_effect = ApiException(
             status=400,
             reason="bad request",
         )
@@ -119,27 +132,40 @@ def test_create_managed_database_wraps_api_errors():
             client.create_managed_database("mydb")
 
 
+def test_create_managed_database_with_expires_at():
+    client = _client()
+    created = _detail()
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.create_database.return_value = created
+        client.create_managed_database("mydb", expires_at="7d")
+    req = dbs.return_value.create_database.call_args.args[0]
+    assert req.expires_at == "7d"
+
+
+def test_delete_managed_database_calls_sdk():
+    client = _client()
+    db = managed_database_from_detail(_detail())
+    with patch.object(client, "resolve_managed_database", return_value=db), \
+         patch.object(client, "_databases_api") as dbs:
+        client.delete_managed_database("db_1")
+    dbs.return_value.delete_database.assert_called_once_with("db_1")
+
+
 def test_list_managed_tables_builds_full_names():
     client = _client()
-    listing = SimpleNamespace(
-        connections=[
-            SimpleNamespace(id="conn1", name="sales", source_type="managed"),
-        ]
-    )
+    db = managed_database_from_detail(_detail())
     table = SimpleNamespace(
-        connection="sales",
+        connection="conn_1",
         var_schema="public",
         table="orders",
         synced=True,
         last_sync="2026-05-19T00:00:00Z",
     )
-    with patch.object(client, "connections") as connections, patch.object(
-        client, "iter_tables", return_value=[table]
-    ):
-        connections.return_value.list_connections.return_value = listing
-        rows = client.list_managed_tables("sales")
+    with patch.object(client, "resolve_managed_database", return_value=db), \
+         patch.object(client, "iter_tables", return_value=[table]):
+        rows = client.list_managed_tables("db_1")
     assert len(rows) == 1
-    assert rows[0].full_name == "sales.public.orders"
+    assert rows[0].full_name == "db_1.public.orders"
     assert rows[0].synced is True
 
 
@@ -162,48 +188,55 @@ def test_upload_parquet_returns_upload_id():
 
 def test_load_managed_table_with_upload_id():
     client = _client()
-    db = SimpleNamespace(id="conn1", name="sales", source_type="managed")
+    db = managed_database_from_detail(_detail())
     loaded = SimpleNamespace(
-        connection_id="conn1",
+        connection_id="conn_1",
         schema_name="public",
         table_name="orders",
         row_count=42,
     )
-    with patch.object(client, "resolve_managed_database", return_value=db), patch.object(
-        client, "connections"
-    ) as connections:
+    with patch.object(client, "resolve_managed_database", return_value=db), \
+         patch.object(client, "connections") as connections:
         connections.return_value.load_managed_table.return_value = loaded
         result = client.load_managed_table(
-            "sales",
+            "db_1",
             "orders",
             upload_id="upl_123",
         )
     assert result.row_count == 42
-    assert result.full_name == "sales.public.orders"
+    assert result.full_name == "db_1.public.orders"
+    connections.return_value.load_managed_table.assert_called_once_with(
+        "conn_1", "public", "orders", _Any()
+    )
 
 
 def test_load_managed_table_requires_exactly_one_source():
     client = _client()
     with pytest.raises(ValueError, match="Exactly one"):
-        client.load_managed_table("sales", "orders")
+        client.load_managed_table("db_1", "orders")
     with pytest.raises(ValueError, match="Exactly one"):
         client.load_managed_table(
-            "sales",
+            "db_1",
             "orders",
             upload_id="upl_1",
             file="/tmp/x.parquet",
         )
 
 
-def test_delete_managed_table_calls_sdk():
+def test_delete_managed_table_uses_default_connection_id():
     client = _client()
-    db = SimpleNamespace(id="conn1", name="sales", source_type="managed")
-    with patch.object(client, "resolve_managed_database", return_value=db), patch.object(
-        client, "connections"
-    ) as connections:
-        client.delete_managed_table("sales", "orders")
+    db = managed_database_from_detail(_detail())
+    with patch.object(client, "resolve_managed_database", return_value=db), \
+         patch.object(client, "connections") as connections:
+        client.delete_managed_table("db_1", "orders")
     connections.return_value.delete_managed_table.assert_called_once_with(
-        "conn1",
+        "conn_1",
         "public",
         "orders",
     )
+
+
+class _Any:
+    """Matches any value in assert_called_once_with."""
+    def __eq__(self, other: object) -> bool:
+        return True

@@ -13,9 +13,6 @@ from hotdata_runtime.databases import (
     LoadManagedTableResult,
     ManagedDatabase,
     ManagedTable,
-    MANAGED_SOURCE_TYPE,
-    build_managed_config,
-    create_connection_request,
     is_parquet_path,
 )
 from hotdata_runtime.env import (
@@ -42,12 +39,9 @@ __all__ = [
     "DEFAULT_SCHEMA",
     "HotdataClient",
     "LoadManagedTableResult",
-    "MANAGED_SOURCE_TYPE",
     "ManagedDatabase",
     "ManagedTable",
     "QueryResult",
-    "build_managed_config",
-    "create_connection_request",
     "is_parquet_path",
     "workspace_health_lines",
     "default_api_key",

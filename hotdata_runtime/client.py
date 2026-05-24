@@ -9,6 +9,7 @@ from urllib3.exceptions import ProtocolError
 
 from hotdata import ApiClient, Configuration
 from hotdata.api.connections_api import ConnectionsApi
+from hotdata.api.databases_api import DatabasesApi
 from hotdata.api.information_schema_api import InformationSchemaApi
 from hotdata.api.query_api import QueryApi
 from hotdata.api.query_runs_api import QueryRunsApi
@@ -16,9 +17,12 @@ from hotdata.api.results_api import ResultsApi
 from hotdata.api.uploads_api import UploadsApi
 from hotdata.exceptions import ApiException
 from hotdata.models.async_query_response import AsyncQueryResponse
+from hotdata.models.create_database_request import CreateDatabaseRequest
+from hotdata.models.database_default_schema_decl import DatabaseDefaultSchemaDecl
+from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
+from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
-from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 from hotdata.models.table_info import TableInfo
 
 from hotdata_runtime.env import (
@@ -33,11 +37,9 @@ from hotdata_runtime.databases import (
     LoadManagedTableResult,
     ManagedDatabase,
     ManagedTable,
-    MANAGED_SOURCE_TYPE,
     api_error_message,
-    create_connection_request,
     is_parquet_path,
-    managed_database_from_connection,
+    managed_database_from_detail,
 )
 from hotdata_runtime.http import default_http_retries
 from hotdata_runtime.result import QueryResult
@@ -130,6 +132,9 @@ class HotdataClient:
     def connections(self) -> ConnectionsApi:
         return ConnectionsApi(self._api)
 
+    def _databases_api(self) -> DatabasesApi:
+        return DatabasesApi(self._api)
+
     def _information_schema(self) -> InformationSchemaApi:
         return InformationSchemaApi(self._api)
 
@@ -152,47 +157,71 @@ class HotdataClient:
         return UploadsApi(self._api)
 
     def list_managed_databases(self) -> list[ManagedDatabase]:
-        listing = self.connections().list_connections()
-        return [
-            managed_database_from_connection(c)
-            for c in listing.connections
-            if c.source_type == MANAGED_SOURCE_TYPE
-        ]
+        listing = self._databases_api().list_databases()
+        result: list[ManagedDatabase] = []
+        for summary in listing.databases:
+            try:
+                detail = self._databases_api().get_database(summary.id)
+                result.append(managed_database_from_detail(detail))
+            except ApiException:
+                pass
+        return result
 
     def resolve_managed_database(self, name_or_id: str) -> ManagedDatabase:
-        listing = self.connections().list_connections()
-        match = None
-        for c in listing.connections:
-            if c.id == name_or_id or c.name == name_or_id:
-                match = c
+        # Try direct ID lookup first
+        try:
+            detail = self._databases_api().get_database(name_or_id)
+            return managed_database_from_detail(detail)
+        except ApiException as e:
+            if e.status != 404:
+                raise RuntimeError(api_error_message(e)) from e
+
+        # Fall back to description-based lookup
+        listing = self._databases_api().list_databases()
+        match_id: str | None = None
+        for db in listing.databases:
+            if db.description == name_or_id:
+                match_id = db.id
                 break
-        if match is None:
+        if match_id is None:
             raise KeyError(f"No database named or with id {name_or_id!r}")
-        if match.source_type != MANAGED_SOURCE_TYPE:
-            raise ValueError(
-                f"{match.name!r} is not a managed database "
-                f"(source_type: {match.source_type})"
-            )
-        return managed_database_from_connection(match)
+        try:
+            detail = self._databases_api().get_database(match_id)
+        except ApiException as e:
+            raise RuntimeError(api_error_message(e)) from e
+        return managed_database_from_detail(detail)
 
     def create_managed_database(
         self,
-        name: str,
+        description: str | None = None,
         *,
         schema: str = DEFAULT_SCHEMA,
         tables: list[str] | None = None,
+        expires_at: str | None = None,
     ) -> ManagedDatabase:
-        request = create_connection_request(name, schema=schema, tables=tables)
+        schemas = None
+        if tables:
+            schemas = [
+                DatabaseDefaultSchemaDecl(
+                    name=schema,
+                    tables=[DatabaseDefaultTableDecl(name=t) for t in tables],
+                )
+            ]
+        request = CreateDatabaseRequest(
+            description=description,
+            schemas=schemas,
+            expires_at=expires_at,
+        )
         try:
-            created = self.connections().create_connection(request)
+            created = self._databases_api().create_database(request)
         except ApiException as e:
             raise RuntimeError(api_error_message(e)) from e
-        return managed_database_from_connection(created)
+        return managed_database_from_detail(created)
 
     def delete_managed_database(self, name_or_id: str) -> None:
         db = self.resolve_managed_database(name_or_id)
         try:
-            self.connections().delete_connection(db.id)
+            self._databases_api().delete_database(db.id)
         except ApiException as e:
             raise RuntimeError(api_error_message(e)) from e
 
@@ -204,12 +233,12 @@ class HotdataClient:
     ) -> list[ManagedTable]:
         db = self.resolve_managed_database(database)
         rows: list[ManagedTable] = []
-        for t in self.iter_tables(connection_id=db.id):
+        for t in self.iter_tables(connection_id=db.default_connection_id):
             if schema is not None and t.var_schema != schema:
                 continue
             rows.append(
                 ManagedTable(
-                    full_name=f"{db.name}.{t.var_schema}.{t.table}",
+                    full_name=f"{db.id}.{t.var_schema}.{t.table}",
                     schema=t.var_schema,
                     table=t.table,
                     synced=t.synced,
@@ -258,7 +287,7 @@ class HotdataClient:
         )
         try:
             loaded = self.connections().load_managed_table(
-                db.id,
+                db.default_connection_id,
                 schema,
                 table,
                 request,
@@ -270,7 +299,7 @@ class HotdataClient:
             schema_name=loaded.schema_name,
             table_name=loaded.table_name,
             row_count=loaded.row_count,
-            full_name=f"{db.name}.{loaded.schema_name}.{loaded.table_name}",
+            full_name=f"{db.id}.{loaded.schema_name}.{loaded.table_name}",
         )
 
     def delete_managed_table(
@@ -282,7 +311,7 @@ class HotdataClient:
     ) -> None:
         db = self.resolve_managed_database(database)
         try:
-            self.connections().delete_managed_table(db.id, schema, table)
+            self.connections().delete_managed_table(db.default_connection_id, schema, table)
         except ApiException as e:
             raise RuntimeError(api_error_message(e)) from e
 
