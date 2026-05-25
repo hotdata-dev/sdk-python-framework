@@ -475,11 +475,20 @@ class HotdataClient:
             f"(last status: {getattr(last, 'status', None)})"
         )
 
-    def execute_sql(self, sql: str) -> QueryResult:
+    def execute_sql(self, sql: str, *, database: str | None = None) -> QueryResult:
+        """Execute SQL and return a :class:`QueryResult`.
+
+        Pass ``database`` to scope the query to a managed database.  The name
+        is resolved to a database ID once before the retry loop, and the
+        ``X-Database-Id`` header is sent with every attempt.  Inside a managed
+        database the built-in catalog is always ``"default"``, so table
+        references should use ``"default"."<schema>"."<table>"``.
+        """
+        database_id = self.resolve_managed_database(database).id if database else None
         last_err: BaseException | None = None
         for attempt in range(3):
             try:
-                return self._execute_sql_once(sql)
+                return self._execute_sql_once(sql, database_id=database_id)
             except (ProtocolError, ConnectionResetError, Urllib3HTTPError) as e:
                 last_err = e
                 if attempt == 2:
@@ -487,10 +496,13 @@ class HotdataClient:
                 time.sleep(0.2 * (2**attempt))
         raise last_err  # pragma: no cover
 
-    def _execute_sql_once(self, sql: str) -> QueryResult:
+    def _execute_sql_once(self, sql: str, *, database_id: str | None = None) -> QueryResult:
         q = self._query_api()
         try:
-            raw = q.query(QueryRequest(sql=sql))
+            if database_id:
+                raw = q.query(QueryRequest(sql=sql), x_database_id=database_id)
+            else:
+                raw = q.query(QueryRequest(sql=sql))
         except ApiException as e:
             raise RuntimeError(e.reason or str(e)) from e
 

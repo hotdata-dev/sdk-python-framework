@@ -200,6 +200,67 @@ def test_list_recent_results_returns_normalized_summaries():
     assert out[0].to_dict()["created_at"] == "2026-01-01T00:00:00Z"
 
 
+def test_execute_sql_sends_no_database_id_by_default():
+    from hotdata.models.query_response import QueryResponse as _QR
+
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+
+    class FakeQueryApi:
+        def __init__(self):
+            self.calls: list[dict] = []
+
+        def query(self, request, **kwargs):
+            self.calls.append(kwargs)
+            return _QR(
+                columns=["n"],
+                rows=[[1]],
+                row_count=1,
+                nullable=[False],
+                result_id="res_1",
+                query_run_id="qrun_1",
+                execution_time_ms=1,
+            )
+
+    fake_q = FakeQueryApi()
+    with patch.object(client, "_query_api", return_value=fake_q):
+        client.execute_sql("SELECT 1")
+
+    assert fake_q.calls == [{}]
+
+
+def test_execute_sql_resolves_database_and_sends_x_database_id():
+    from hotdata.models.query_response import QueryResponse as _QR
+    from types import SimpleNamespace
+
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+
+    class FakeQueryApi:
+        def __init__(self):
+            self.calls: list[dict] = []
+
+        def query(self, request, **kwargs):
+            self.calls.append(kwargs)
+            return _QR(
+                columns=["n"],
+                rows=[[1]],
+                row_count=1,
+                nullable=[False],
+                result_id="res_1",
+                query_run_id="qrun_1",
+                execution_time_ms=1,
+            )
+
+    fake_q = FakeQueryApi()
+    fake_db = SimpleNamespace(id="db_abc")
+
+    with patch.object(client, "_query_api", return_value=fake_q), \
+         patch.object(client, "resolve_managed_database", return_value=fake_db) as resolve:
+        client.execute_sql('SELECT * FROM "default"."public"."orders"', database="my_db")
+
+    resolve.assert_called_once_with("my_db")
+    assert fake_q.calls == [{"x_database_id": "db_abc"}]
+
+
 def test_list_run_history_returns_normalized_items():
     client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
     listing = SimpleNamespace(
