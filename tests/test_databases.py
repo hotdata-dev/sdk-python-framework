@@ -20,7 +20,7 @@ def _client() -> HotdataClient:
 def _detail(id="db_1", description="sales", default_connection_id="conn_1"):
     return SimpleNamespace(
         id=id,
-        description=description,
+        name=description,
         default_connection_id=default_connection_id,
     )
 
@@ -86,7 +86,7 @@ def test_resolve_managed_database_by_id():
 
 def test_resolve_managed_database_by_description():
     client = _client()
-    summary = SimpleNamespace(id="db_1", description="sales")
+    summary = SimpleNamespace(id="db_1", name="sales")
     listing = SimpleNamespace(databases=[summary])
     detail = _detail()
     with patch.object(client, "_databases_api") as dbs:

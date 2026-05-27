@@ -180,7 +180,7 @@ class HotdataClient:
         listing = self._databases_api().list_databases()
         match_id: str | None = None
         for db in listing.databases:
-            if db.description == name_or_id:
+            if db.name == name_or_id:
                 match_id = db.id
                 break
         if match_id is None:
@@ -208,7 +208,7 @@ class HotdataClient:
                 )
             ]
         request = CreateDatabaseRequest(
-            description=description,
+            name=description,
             schemas=schemas,
             expires_at=expires_at,
         )

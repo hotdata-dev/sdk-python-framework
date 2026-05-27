@@ -52,7 +52,7 @@ def is_parquet_path(path: str) -> bool:
 def managed_database_from_detail(detail: Any) -> ManagedDatabase:
     return ManagedDatabase(
         id=str(detail.id),
-        description=detail.description,
+        description=detail.name,
         default_connection_id=str(detail.default_connection_id),
     )
 
