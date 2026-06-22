@@ -4,8 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import mock_open, patch
 
 import pytest
-
 from hotdata.exceptions import ApiException
+
 from hotdata_runtime.client import HotdataClient
 from hotdata_runtime.databases import (
     is_parquet_path,
@@ -145,8 +145,10 @@ def test_create_managed_database_with_expires_at():
 def test_delete_managed_database_calls_sdk():
     client = _client()
     db = managed_database_from_detail(_detail())
-    with patch.object(client, "resolve_managed_database", return_value=db), \
-         patch.object(client, "_databases_api") as dbs:
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "_databases_api") as dbs,
+    ):
         client.delete_managed_database("db_1")
     dbs.return_value.delete_database.assert_called_once_with("db_1")
 
@@ -161,8 +163,10 @@ def test_list_managed_tables_builds_full_names():
         synced=True,
         last_sync="2026-05-19T00:00:00Z",
     )
-    with patch.object(client, "resolve_managed_database", return_value=db), \
-         patch.object(client, "iter_tables", return_value=[table]):
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "iter_tables", return_value=[table]),
+    ):
         rows = client.list_managed_tables("db_1")
     assert len(rows) == 1
     assert rows[0].full_name == "db_1.public.orders"
@@ -178,9 +182,10 @@ def test_upload_parquet_rejects_non_parquet():
 def test_upload_parquet_returns_upload_id():
     client = _client()
     uploaded = SimpleNamespace(id="upl_123")
-    with patch("builtins.open", mock_open(read_data=b"PAR1")), patch.object(
-        client, "uploads"
-    ) as uploads:
+    with (
+        patch("builtins.open", mock_open(read_data=b"PAR1")),
+        patch.object(client, "uploads") as uploads,
+    ):
         uploads.return_value.upload_file.return_value = uploaded
         upload_id = client.upload_parquet("/tmp/data.parquet")
     assert upload_id == "upl_123"
@@ -195,8 +200,10 @@ def test_load_managed_table_with_upload_id():
         table_name="orders",
         row_count=42,
     )
-    with patch.object(client, "resolve_managed_database", return_value=db), \
-         patch.object(client, "connections") as connections:
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "connections") as connections,
+    ):
         connections.return_value.load_managed_table.return_value = loaded
         result = client.load_managed_table(
             "db_1",
@@ -226,8 +233,10 @@ def test_load_managed_table_requires_exactly_one_source():
 def test_delete_managed_table_uses_default_connection_id():
     client = _client()
     db = managed_database_from_detail(_detail())
-    with patch.object(client, "resolve_managed_database", return_value=db), \
-         patch.object(client, "connections") as connections:
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "connections") as connections,
+    ):
         client.delete_managed_table("db_1", "orders")
     connections.return_value.delete_managed_table.assert_called_once_with(
         "conn_1",
@@ -238,5 +247,6 @@ def test_delete_managed_table_uses_default_connection_id():
 
 class _Any:
     """Matches any value in assert_called_once_with."""
+
     def __eq__(self, other: object) -> bool:
         return True

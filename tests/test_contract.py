@@ -10,27 +10,32 @@ from hotdata_runtime.result import QueryResult
 
 def test_public_exports_contract():
     assert hr.__all__ == [
-        "__version__",
         "DEFAULT_SCHEMA",
         "HotdataClient",
+        "HotdataError",
+        "HotdataTerminalError",
+        "HotdataTransientError",
         "LoadManagedTableResult",
         "ManagedDatabase",
+        "ManagedDatabaseClient",
         "ManagedTable",
         "QueryResult",
-        "is_parquet_path",
-        "workspace_health_lines",
+        "ResultSummary",
+        "RunHistoryItem",
+        "WorkspaceSelection",
+        "__version__",
+        "classify_sdk_error",
         "default_api_key",
         "default_host",
         "default_session_id",
         "explicit_workspace_id",
         "from_env",
+        "is_parquet_path",
         "list_workspaces",
         "normalize_host",
         "pick_workspace",
         "resolve_workspace_selection",
-        "ResultSummary",
-        "RunHistoryItem",
-        "WorkspaceSelection",
+        "workspace_health_lines",
     ]
 
 

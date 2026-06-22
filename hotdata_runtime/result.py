@@ -26,7 +26,7 @@ class QueryResult:
         max_rows: int | None = None,
     ) -> list[dict[str, Any]]:
         rows = self.rows if max_rows is None else self.rows[:max_rows]
-        return [dict(zip(self.columns, row)) for row in rows]
+        return [dict(zip(self.columns, row, strict=True)) for row in rows]
 
     def metadata_dict(self) -> dict[str, Any]:
         return {

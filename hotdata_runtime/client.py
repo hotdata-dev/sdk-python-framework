@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import time
-from typing import Any, Iterator
-
-from urllib3.exceptions import HTTPError as Urllib3HTTPError
-from urllib3.exceptions import ProtocolError
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from hotdata import ApiClient, Configuration
 from hotdata.api.connections_api import ConnectionsApi
@@ -24,14 +22,9 @@ from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
 from hotdata.models.table_info import TableInfo
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
+from urllib3.exceptions import ProtocolError
 
-from hotdata_runtime.env import (
-    default_api_key,
-    default_host,
-    default_session_id,
-    normalize_host,
-    pick_workspace,
-)
 from hotdata_runtime.databases import (
     DEFAULT_SCHEMA,
     LoadManagedTableResult,
@@ -40,6 +33,13 @@ from hotdata_runtime.databases import (
     api_error_message,
     is_parquet_path,
     managed_database_from_detail,
+)
+from hotdata_runtime.env import (
+    default_api_key,
+    default_host,
+    default_session_id,
+    normalize_host,
+    pick_workspace,
 )
 from hotdata_runtime.http import default_http_retries
 from hotdata_runtime.result import QueryResult
@@ -250,9 +250,7 @@ class HotdataClient:
 
     def upload_parquet(self, path: str) -> str:
         if not is_parquet_path(path):
-            raise ValueError(
-                f"Managed table loads require a parquet file (got {path!r})"
-            )
+            raise ValueError(f"Managed table loads require a parquet file (got {path!r})")
         with open(path, "rb") as f:
             data = f.read()
         try:
@@ -392,8 +390,7 @@ class HotdataClient:
         if duplicate_names:
             names = ", ".join(sorted(duplicate_names))
             raise RuntimeError(
-                f"Duplicate connection names found: {names}. "
-                "Use an explicit connection_id."
+                f"Duplicate connection names found: {names}. Use an explicit connection_id."
             )
         return id_map
 
@@ -405,9 +402,7 @@ class HotdataClient:
     ) -> list[TableInfo]:
         parts = qualified.split(".")
         if len(parts) < 3:
-            raise ValueError(
-                f"Expected connection.schema.table, got {qualified!r}"
-            )
+            raise ValueError(f"Expected connection.schema.table, got {qualified!r}")
         conn_name, schema_name, table_name = (
             parts[0],
             parts[1],
@@ -466,9 +461,7 @@ class HotdataClient:
             if last.status == "ready":
                 return last
             if last.status in _RESULT_FAILURE:
-                raise RuntimeError(
-                    last.error_message or f"Result {last.status}"
-                )
+                raise RuntimeError(last.error_message or f"Result {last.status}")
             time.sleep(interval_s)
         raise TimeoutError(
             f"Result {result_id} not ready within {timeout_s}s "
@@ -509,9 +502,7 @@ class HotdataClient:
         if isinstance(raw, AsyncQueryResponse):
             run = self._poll_query_run(raw.query_run_id)
             if run.status != "succeeded":
-                raise RuntimeError(
-                    run.error_message or f"Query failed ({run.status})"
-                )
+                raise RuntimeError(run.error_message or f"Query failed ({run.status})")
             if run.result_id:
                 persisted = self._wait_result_ready(run.result_id)
                 return QueryResult.from_get_result(persisted)

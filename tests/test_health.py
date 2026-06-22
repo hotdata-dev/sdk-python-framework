@@ -23,9 +23,7 @@ def test_workspace_health_ok():
 
 
 def test_workspace_health_ok_includes_sandbox_when_session_set():
-    client = HotdataClient(
-        "k", "ws", host="https://api.hotdata.dev", session_id="sb_test"
-    )
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev", session_id="sb_test")
     listing = type("L", (), {"connections": [object()]})()
 
     class FakeConnectionsApi:
