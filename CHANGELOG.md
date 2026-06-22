@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-22
 
+### Added
 
+- Adopt the `hotdata` 0.4.1 SDK surface.
+- New typed error-handling public API: `HotdataError`, `HotdataTerminalError`, `HotdataTransientError`, and `classify_sdk_error` (`hotdata_runtime/errors.py`).
+- `ManagedDatabaseClient` for managed database operations (`hotdata_runtime/managed_client.py`).
+- `py.typed` marker so downstream consumers pick up inline type information.
+
+### Changed
+
+- Bump the `hotdata` dependency pin to `>=0.4.1`.
+- Add ruff and mypy tooling configuration and dev dependencies (`ruff>=0.5`, `mypy>=1.5`); apply ruff lint/format cleanup across the package.
 
 
 ## [0.2.4] - 2026-06-01

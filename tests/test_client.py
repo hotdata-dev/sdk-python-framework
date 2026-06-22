@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-from hotdata_runtime.env import normalize_host, pick_workspace, resolve_workspace_selection
 from hotdata_runtime.client import HotdataClient
+from hotdata_runtime.env import normalize_host, pick_workspace, resolve_workspace_selection
 
 
 def _clear_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -39,9 +38,7 @@ def test_resolve_workspace_selection_prefers_env_without_listing(
 ):
     monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
     with patch("hotdata_runtime.env.list_workspaces") as listing:
-        resolved = resolve_workspace_selection(
-            "k", "https://api.hotdata.dev", None
-        )
+        resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     listing.assert_not_called()
     assert resolved.workspace_id == "ws_explicit"
     assert resolved.source == "explicit_env"
@@ -86,9 +83,7 @@ def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatc
     listing = SimpleNamespace(workspaces=items)
     with patch("hotdata_runtime.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
-        resolved = resolve_workspace_selection(
-            "k", "https://api.hotdata.dev", None
-        )
+        resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     assert resolved.workspace_id == "ws_1"
     assert resolved.source == "first"
     assert resolved.workspaces == items
@@ -107,9 +102,7 @@ def test_resolve_workspace_selection_returns_workspaces_and_source(
 
     with patch("hotdata_runtime.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
-        resolved = resolve_workspace_selection(
-            "k", "https://api.hotdata.dev", None
-        )
+        resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     assert resolved.workspace_id == "ws_2"
     assert resolved.source == "active"
     assert resolved.workspaces == items
@@ -130,9 +123,11 @@ def test_wait_result_ready_raises_on_cancelled():
         def get_result(self, result_id: str):
             return SimpleNamespace(status="cancelled", error_message=None)
 
-    with patch.object(client, "_results_api", return_value=FakeResultsApi()):
-        with pytest.raises(RuntimeError, match="cancelled"):
-            client._wait_result_ready("res_1", timeout_s=0.1, interval_s=0)
+    with (
+        patch.object(client, "_results_api", return_value=FakeResultsApi()),
+        pytest.raises(RuntimeError, match="cancelled"),
+    ):
+        client._wait_result_ready("res_1", timeout_s=0.1, interval_s=0)
 
 
 def test_connection_id_by_name_raises_on_duplicate_names():
@@ -148,9 +143,11 @@ def test_connection_id_by_name_raises_on_duplicate_names():
         def list_connections(self):
             return listing
 
-    with patch.object(client, "connections", return_value=FakeConnectionsApi()):
-        with pytest.raises(RuntimeError, match="Duplicate connection names"):
-            client.connection_id_by_name()
+    with (
+        patch.object(client, "connections", return_value=FakeConnectionsApi()),
+        pytest.raises(RuntimeError, match="Duplicate connection names"),
+    ):
+        client.connection_id_by_name()
 
 
 def test_columns_for_qualified_prefers_explicit_connection_id():
@@ -168,9 +165,10 @@ def test_columns_for_qualified_prefers_explicit_connection_id():
             return response
 
     fake_api = FakeInformationSchemaApi()
-    with patch.object(client, "_information_schema", return_value=fake_api), patch.object(
-        client, "connection_id_by_name"
-    ) as id_map:
+    with (
+        patch.object(client, "_information_schema", return_value=fake_api),
+        patch.object(client, "connection_id_by_name") as id_map,
+    ):
         cols = client.columns_for_qualified(
             "warehouse.public.orders",
             connection_id="conn_explicit",
@@ -215,6 +213,8 @@ def test_execute_sql_sends_no_database_id_by_default():
                 columns=["n"],
                 rows=[[1]],
                 row_count=1,
+                preview_row_count=1,
+                truncated=False,
                 nullable=[False],
                 result_id="res_1",
                 query_run_id="qrun_1",
@@ -229,8 +229,9 @@ def test_execute_sql_sends_no_database_id_by_default():
 
 
 def test_execute_sql_resolves_database_and_sends_x_database_id():
-    from hotdata.models.query_response import QueryResponse as _QR
     from types import SimpleNamespace
+
+    from hotdata.models.query_response import QueryResponse as _QR
 
     client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
 
@@ -244,6 +245,8 @@ def test_execute_sql_resolves_database_and_sends_x_database_id():
                 columns=["n"],
                 rows=[[1]],
                 row_count=1,
+                preview_row_count=1,
+                truncated=False,
                 nullable=[False],
                 result_id="res_1",
                 query_run_id="qrun_1",
@@ -253,8 +256,10 @@ def test_execute_sql_resolves_database_and_sends_x_database_id():
     fake_q = FakeQueryApi()
     fake_db = SimpleNamespace(id="db_abc")
 
-    with patch.object(client, "_query_api", return_value=fake_q), \
-         patch.object(client, "resolve_managed_database", return_value=fake_db) as resolve:
+    with (
+        patch.object(client, "_query_api", return_value=fake_q),
+        patch.object(client, "resolve_managed_database", return_value=fake_db) as resolve,
+    ):
         client.execute_sql('SELECT * FROM "default"."public"."orders"', database="my_db")
 
     resolve.assert_called_once_with("my_db")

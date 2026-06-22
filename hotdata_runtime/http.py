@@ -13,7 +13,5 @@ def default_http_retries() -> Retry:
         read=3,
         backoff_factor=0.2,
         status_forcelist=(502, 503, 504),
-        allowed_methods=frozenset(
-            ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
-        ),
+        allowed_methods=frozenset(["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]),
     )
