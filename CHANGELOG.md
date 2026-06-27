@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+
+## [0.4.1] - 2026-06-26
+
+### Fixed
+
+- `ManagedDatabaseClient.fetch_table` now waits for the persisted result to reach `ready` before fetching it as Arrow on the synchronous query path (it previously only waited on the async path). This fixes failures on read-modify-write loads (merge/append) and state reads against the live backend, where the result is often still `processing` when the inline preview returns.
+
 ## [0.4.0] - 2026-06-26
 
 ### Changed
