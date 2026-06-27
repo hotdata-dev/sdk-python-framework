@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import pyarrow as pa
 from hotdata.api.query_api import QueryApi
@@ -30,6 +30,16 @@ from hotdata_framework.errors import (
 T = TypeVar("T")
 
 
+class _StatusResponse(Protocol):
+    """Async resources (query runs, results) expose a status and error message."""
+
+    status: str
+    error_message: str | None
+
+
+S = TypeVar("S", bound=_StatusResponse)
+
+
 class ManagedDatabaseClient:
     """Managed-database client with bounded retries over hotdata-framework.
 
@@ -38,6 +48,10 @@ class ManagedDatabaseClient:
     Arrow-based result fetching, and convenience helpers for the managed
     database lifecycle.
     """
+
+    _QUERY_TIMEOUT_SECONDS = 300.0
+    _POLL_INTERVAL_SECONDS = 0.4
+    _MAX_BACKOFF_SECONDS = 30.0
 
     def __init__(
         self,
@@ -100,7 +114,27 @@ class ManagedDatabaseClient:
 
         return self._request_with_retry(operation)
 
-    _QUERY_TIMEOUT_SECONDS = 300.0
+    def _poll(
+        self,
+        fetch: Callable[[], S],
+        *,
+        is_ready: Callable[[S], bool],
+        describe: str,
+    ) -> S:
+        """Poll ``fetch`` until ``is_ready`` is satisfied, or raise on failure/timeout.
+
+        ``failed``/``cancelled`` statuses raise ``RuntimeError``; exceeding
+        :attr:`_QUERY_TIMEOUT_SECONDS` raises ``TimeoutError``.
+        """
+        deadline = time.monotonic() + self._QUERY_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            obj = fetch()
+            if obj.status in ("failed", "cancelled"):
+                raise RuntimeError(obj.error_message or f"{describe} {obj.status}")
+            if is_ready(obj):
+                return obj
+            time.sleep(self._POLL_INTERVAL_SECONDS)
+        raise TimeoutError(f"{describe} timed out after {self._QUERY_TIMEOUT_SECONDS}s")
 
     def _query_database_scoped(self, sql: str, *, database_id: str) -> str | None:
         raw = QueryApi(self._runtime.api).query(
@@ -108,41 +142,34 @@ class ManagedDatabaseClient:
             x_database_id=database_id,
         )
         if isinstance(raw, QueryResponse):
-            return raw.result_id
-
+            # A synchronous response still persists its full result out-of-band
+            # under ``result_id``; that result may be ``processing`` when the
+            # inline preview returns, so wait for ``ready`` before the caller
+            # fetches it as Arrow.
+            return self._wait_result_ready(raw.result_id)
         if isinstance(raw, AsyncQueryResponse):
-            runs = QueryRunsApi(self._runtime.api)
-            deadline = time.monotonic() + self._QUERY_TIMEOUT_SECONDS
-            result_id: str | None = None
-            while time.monotonic() < deadline:
-                run = runs.get_query_run(raw.query_run_id)
-                if run.status == "succeeded":
-                    result_id = run.result_id
-                    break
-                if run.status in ("failed", "cancelled"):
-                    raise RuntimeError(run.error_message or f"Query {run.status}")
-                time.sleep(0.5)
-            else:
-                raise TimeoutError(
-                    f"Managed database query timed out after {self._QUERY_TIMEOUT_SECONDS}s"
-                )
-            return self._wait_result_ready(result_id)
-
+            return self._wait_result_ready(self._await_query_run(raw.query_run_id))
         return None
+
+    def _await_query_run(self, query_run_id: str) -> str | None:
+        runs = QueryRunsApi(self._runtime.api)
+        run = self._poll(
+            lambda: runs.get_query_run(query_run_id),
+            is_ready=lambda r: r.status == "succeeded",
+            describe="Query",
+        )
+        return run.result_id
 
     def _wait_result_ready(self, result_id: str | None) -> str | None:
         if result_id is None:
             return None
         results = ResultsApi(self._runtime.api)
-        deadline = time.monotonic() + self._QUERY_TIMEOUT_SECONDS
-        while time.monotonic() < deadline:
-            r = results.get_result(result_id)
-            if r.status == "ready":
-                return result_id
-            if r.status in ("failed", "cancelled"):
-                raise RuntimeError(r.error_message or f"Result {r.status}")
-            time.sleep(0.3)
-        raise TimeoutError(f"Result {result_id} not ready after {self._QUERY_TIMEOUT_SECONDS}s")
+        self._poll(
+            lambda: results.get_result(result_id),
+            is_ready=lambda r: r.status == "ready",
+            describe=f"Result {result_id}",
+        )
+        return result_id
 
     def fetch_table_rows(self, *, database: str, schema: str, table: str) -> list[dict[str, Any]]:
         result = self.fetch_table(database=database, schema=schema, table=table)
@@ -167,8 +194,6 @@ class ManagedDatabaseClient:
                 upload_id=upload_id,
             )
         )
-
-    _MAX_BACKOFF_SECONDS = 30.0
 
     def _request_with_retry(self, operation: Callable[[], T]) -> T:
         for attempt in range(1, self._max_retries + 1):
