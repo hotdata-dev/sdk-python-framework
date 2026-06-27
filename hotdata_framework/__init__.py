@@ -2,20 +2,20 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from hotdata_runtime.client import (
+from hotdata_framework.client import (
     HotdataClient,
     ResultSummary,
     RunHistoryItem,
     from_env,
 )
-from hotdata_runtime.databases import (
+from hotdata_framework.databases import (
     DEFAULT_SCHEMA,
     LoadManagedTableResult,
     ManagedDatabase,
     ManagedTable,
     is_parquet_path,
 )
-from hotdata_runtime.env import (
+from hotdata_framework.env import (
     WorkspaceSelection,
     default_api_key,
     default_host,
@@ -26,18 +26,18 @@ from hotdata_runtime.env import (
     pick_workspace,
     resolve_workspace_selection,
 )
-from hotdata_runtime.errors import (
+from hotdata_framework.errors import (
     HotdataError,
     HotdataTerminalError,
     HotdataTransientError,
     classify_sdk_error,
 )
-from hotdata_runtime.health import workspace_health_lines
-from hotdata_runtime.managed_client import ManagedDatabaseClient
-from hotdata_runtime.result import QueryResult
+from hotdata_framework.health import workspace_health_lines
+from hotdata_framework.managed_client import ManagedDatabaseClient
+from hotdata_framework.result import QueryResult
 
 try:
-    __version__ = version("hotdata-runtime")
+    __version__ = version("hotdata-framework")
 except PackageNotFoundError:
     __version__ = "0.0.0+unknown"
 

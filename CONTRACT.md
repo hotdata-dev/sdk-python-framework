@@ -1,6 +1,6 @@
-# hotdata-runtime Contract
+# hotdata-framework Contract
 
-`hotdata-runtime` is the framework-agnostic runtime contract for Hotdata integrations.
+`hotdata-framework` is the framework-agnostic runtime contract for Hotdata integrations.
 
 ## Scope
 
@@ -36,7 +36,7 @@ The supported import surface is:
 - `DEFAULT_SCHEMA`
 - `is_parquet_path`
 
-Adapters should import from `hotdata_runtime` and treat this surface as the stable API.
+Adapters should import from `hotdata_framework` and treat this surface as the stable API.
 
 ## Semantic Guarantees
 
@@ -93,7 +93,7 @@ They should not duplicate runtime env/workspace/query semantics.
 
 ## Runtime Non-Goals
 
-`hotdata-runtime` does not define framework UI primitives and does not require framework dependencies.
+`hotdata-framework` does not define framework UI primitives and does not require framework dependencies.
 
 ## Versioning Policy
 

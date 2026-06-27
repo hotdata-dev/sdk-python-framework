@@ -6,8 +6,8 @@ from unittest.mock import mock_open, patch
 import pytest
 from hotdata.exceptions import ApiException
 
-from hotdata_runtime.client import HotdataClient
-from hotdata_runtime.databases import (
+from hotdata_framework.client import HotdataClient
+from hotdata_framework.databases import (
     is_parquet_path,
     managed_database_from_detail,
 )

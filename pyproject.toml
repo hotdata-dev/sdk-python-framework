@@ -3,17 +3,38 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hotdata-runtime"
+name = "hotdata-framework"
 version = "0.3.0"
-description = "Workspace/session runtime primitives for Hotdata integrations"
+description = "Python framework for building Hotdata integrations: workspace/session runtime, query execution, and managed databases"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+keywords = ["hotdata", "python", "framework", "sql", "data", "analytics", "pandas", "arrow"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
 dependencies = [
   "hotdata>=0.4.1",
   "pandas>=2.0",
   "pyarrow>=14.0",
 ]
+
+[project.urls]
+Homepage = "https://www.hotdata.dev"
+Documentation = "https://www.hotdata.dev/docs"
+Repository = "https://github.com/hotdata-dev/sdk-python-framework"
 
 [dependency-groups]
 dev = [
@@ -27,7 +48,7 @@ dev = [
 default-groups = ["dev"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["hotdata_runtime"]
+packages = ["hotdata_framework"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -36,7 +57,7 @@ testpaths = ["tests"]
 python_version = "3.10"
 strict = true
 files = [
-  "hotdata_runtime",
+  "hotdata_framework",
   "tests",
 ]
 namespace_packages = true

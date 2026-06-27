@@ -1,4 +1,4 @@
-from hotdata_runtime.result import QueryResult
+from hotdata_framework.result import QueryResult
 
 
 def _result() -> QueryResult:

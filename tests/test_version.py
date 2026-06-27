@@ -2,7 +2,7 @@ from importlib.metadata import version as dist_version
 
 from packaging.version import Version
 
-import hotdata_runtime as hr
+import hotdata_framework as hr
 
 
 def test_version_is_valid_pep440():
@@ -10,4 +10,4 @@ def test_version_is_valid_pep440():
 
 
 def test_version_matches_distribution_metadata():
-    assert dist_version("hotdata-runtime") == hr.__version__
+    assert dist_version("hotdata-framework") == hr.__version__

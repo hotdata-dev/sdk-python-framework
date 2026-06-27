@@ -1,6 +1,6 @@
-"""Basic hotdata-runtime usage."""
+"""Basic hotdata-framework usage."""
 
-from hotdata_runtime import from_env
+from hotdata_framework import from_env
 
 
 def main() -> None:
