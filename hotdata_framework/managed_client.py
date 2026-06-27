@@ -108,7 +108,11 @@ class ManagedDatabaseClient:
             x_database_id=database_id,
         )
         if isinstance(raw, QueryResponse):
-            return raw.result_id
+            # A synchronous response still persists its full result out-of-band
+            # under ``result_id``; that result may be ``processing`` when the
+            # inline preview returns, so wait for ``ready`` before the caller
+            # fetches it as Arrow.
+            return self._wait_result_ready(raw.result_id)
 
         if isinstance(raw, AsyncQueryResponse):
             runs = QueryRunsApi(self._runtime.api)
