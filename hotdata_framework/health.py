@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from hotdata.exceptions import ApiException
 
-from hotdata_runtime.client import HotdataClient
+from hotdata_framework.client import HotdataClient
 
 
 def workspace_health_lines(client: HotdataClient) -> tuple[bool, list[str]]:

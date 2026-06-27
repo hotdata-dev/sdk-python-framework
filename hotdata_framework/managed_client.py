@@ -20,9 +20,9 @@ from hotdata.models.async_query_response import AsyncQueryResponse
 from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
 
-from hotdata_runtime.client import HotdataClient as RuntimeClient
-from hotdata_runtime.databases import LoadManagedTableResult, ManagedDatabase
-from hotdata_runtime.errors import (
+from hotdata_framework.client import HotdataClient as RuntimeClient
+from hotdata_framework.databases import LoadManagedTableResult, ManagedDatabase
+from hotdata_framework.errors import (
     HotdataTransientError,
     classify_sdk_error,
 )
@@ -31,7 +31,7 @@ T = TypeVar("T")
 
 
 class ManagedDatabaseClient:
-    """Managed-database client with bounded retries over hotdata-runtime.
+    """Managed-database client with bounded retries over hotdata-framework.
 
     This is the shared client used by Hotdata adapter packages (Airflow,
     dlt, etc.).  It wraps the lower-level RuntimeClient with retry logic,

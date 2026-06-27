@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Adopt the `hotdata` 0.4.1 SDK surface.
-- New typed error-handling public API: `HotdataError`, `HotdataTerminalError`, `HotdataTransientError`, and `classify_sdk_error` (`hotdata_runtime/errors.py`).
-- `ManagedDatabaseClient` for managed database operations (`hotdata_runtime/managed_client.py`).
+- New typed error-handling public API: `HotdataError`, `HotdataTerminalError`, `HotdataTransientError`, and `classify_sdk_error` (`hotdata_framework/errors.py`).
+- `ManagedDatabaseClient` for managed database operations (`hotdata_framework/managed_client.py`).
 - `py.typed` marker so downstream consumers pick up inline type information.
 
 ### Changed

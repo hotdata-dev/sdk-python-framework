@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import fields
 from unittest.mock import patch
 
-import hotdata_runtime as hr
-from hotdata_runtime.client import HotdataClient
-from hotdata_runtime.result import QueryResult
+import hotdata_framework as hr
+from hotdata_framework.client import HotdataClient
+from hotdata_framework.result import QueryResult
 
 
 def test_public_exports_contract():

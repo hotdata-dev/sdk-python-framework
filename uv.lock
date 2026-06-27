@@ -100,7 +100,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hotdata-runtime"
+name = "hotdata-framework"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [

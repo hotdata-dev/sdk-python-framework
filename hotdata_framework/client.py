@@ -25,7 +25,7 @@ from hotdata.models.table_info import TableInfo
 from urllib3.exceptions import HTTPError as Urllib3HTTPError
 from urllib3.exceptions import ProtocolError
 
-from hotdata_runtime.databases import (
+from hotdata_framework.databases import (
     DEFAULT_SCHEMA,
     LoadManagedTableResult,
     ManagedDatabase,
@@ -34,15 +34,15 @@ from hotdata_runtime.databases import (
     is_parquet_path,
     managed_database_from_detail,
 )
-from hotdata_runtime.env import (
+from hotdata_framework.env import (
     default_api_key,
     default_host,
     default_session_id,
     normalize_host,
     pick_workspace,
 )
-from hotdata_runtime.http import default_http_retries
-from hotdata_runtime.result import QueryResult
+from hotdata_framework.http import default_http_retries
+from hotdata_framework.result import QueryResult
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 _RESULT_FAILURE = frozenset({"failed", "cancelled"})

@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
-from hotdata_runtime.client import HotdataClient
-from hotdata_runtime.env import normalize_host, pick_workspace, resolve_workspace_selection
+from hotdata_framework.client import HotdataClient
+from hotdata_framework.env import normalize_host, pick_workspace, resolve_workspace_selection
 
 
 def _clear_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -37,7 +37,7 @@ def test_resolve_workspace_selection_prefers_env_without_listing(
     monkeypatch: pytest.MonkeyPatch,
 ):
     monkeypatch.setenv("HOTDATA_WORKSPACE", "ws_explicit")
-    with patch("hotdata_runtime.env.list_workspaces") as listing:
+    with patch("hotdata_framework.env.list_workspaces") as listing:
         resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     listing.assert_not_called()
     assert resolved.workspace_id == "ws_explicit"
@@ -55,7 +55,7 @@ def test_pick_workspace_chooses_first_active(monkeypatch: pytest.MonkeyPatch):
     ]
     listing = SimpleNamespace(workspaces=items)
 
-    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+    with patch("hotdata_framework.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_2"
 
@@ -69,7 +69,7 @@ def test_pick_workspace_falls_back_to_first(monkeypatch: pytest.MonkeyPatch):
     ]
     listing = SimpleNamespace(workspaces=items)
 
-    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+    with patch("hotdata_framework.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         assert pick_workspace("k", "https://api.hotdata.dev", None) == "ws_1"
 
@@ -81,7 +81,7 @@ def test_resolve_workspace_selection_source_first(monkeypatch: pytest.MonkeyPatc
         SimpleNamespace(public_id="ws_2", active=False),
     ]
     listing = SimpleNamespace(workspaces=items)
-    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+    with patch("hotdata_framework.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     assert resolved.workspace_id == "ws_1"
@@ -100,7 +100,7 @@ def test_resolve_workspace_selection_returns_workspaces_and_source(
     ]
     listing = SimpleNamespace(workspaces=items)
 
-    with patch("hotdata_runtime.env.WorkspacesApi") as Api:
+    with patch("hotdata_framework.env.WorkspacesApi") as Api:
         Api.return_value.list_workspaces.return_value = listing
         resolved = resolve_workspace_selection("k", "https://api.hotdata.dev", None)
     assert resolved.workspace_id == "ws_2"
