@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.4.0] - 2026-06-26
+
 ### Changed
 
 - **Renamed the distribution from `hotdata-runtime` to `hotdata-framework`** and the import package from `hotdata_runtime` to `hotdata_framework`. Consumers should depend on `hotdata-framework` and use `import hotdata_framework`. The GitHub repository is now `sdk-python-framework`.
