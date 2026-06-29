@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.5.0] - 2026-06-28
+
 ### Changed
 
 - Adopt the `hotdata` 0.5.0 SDK surface (dependency bumped from `>=0.4.1` to `>=0.5.0`). The release is backward compatible for everything the framework uses; the only API changes are additive (a new optional `format` field on `LoadManagedTableRequest` and an optional `format` parameter on `ResultsApi.get_result`), so no framework code changes were required.
