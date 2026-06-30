@@ -178,6 +178,35 @@ def test_columns_for_qualified_prefers_explicit_connection_id():
     assert fake_api.kwargs["connection_id"] == "conn_explicit"
 
 
+def test_add_managed_table_declares_table_on_existing_database():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    fake_db = SimpleNamespace(id="db_1", default_connection_id="conn")
+
+    class FakeDatabasesApi:
+        def __init__(self):
+            self.calls: list[tuple[str, str, str]] = []
+
+        def add_database_table(self, database_id, var_schema, request):
+            self.calls.append((database_id, var_schema, request.name))
+            return SimpleNamespace(
+                connection_id="conn", var_schema=var_schema, table=request.name
+            )
+
+    fake_api = FakeDatabasesApi()
+    with (
+        patch.object(client, "resolve_managed_database", return_value=fake_db),
+        patch.object(client, "_databases_api", return_value=fake_api),
+    ):
+        result = client.add_managed_table("mydb", "orders", schema="public")
+
+    assert fake_api.calls == [("db_1", "public", "orders")]
+    assert result.full_name == "db_1.public.orders"
+    assert result.schema == "public"
+    assert result.table == "orders"
+    assert result.synced is False
+    assert result.last_sync is None
+
+
 def test_list_recent_results_returns_normalized_summaries():
     client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
     listing = SimpleNamespace(

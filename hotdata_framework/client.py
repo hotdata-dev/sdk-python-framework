@@ -14,6 +14,7 @@ from hotdata.api.query_runs_api import QueryRunsApi
 from hotdata.api.results_api import ResultsApi
 from hotdata.api.uploads_api import UploadsApi
 from hotdata.exceptions import ApiException
+from hotdata.models.add_managed_table_request import AddManagedTableRequest
 from hotdata.models.async_query_response import AsyncQueryResponse
 from hotdata.models.create_database_request import CreateDatabaseRequest
 from hotdata.models.database_default_schema_decl import DatabaseDefaultSchemaDecl
@@ -298,6 +299,33 @@ class HotdataClient:
             table_name=loaded.table_name,
             row_count=loaded.row_count,
             full_name=f"{db.id}.{loaded.schema_name}.{loaded.table_name}",
+        )
+
+    def add_managed_table(
+        self,
+        database: str,
+        table: str,
+        *,
+        schema: str = DEFAULT_SCHEMA,
+    ) -> ManagedTable:
+        """Declare a new table on an existing managed database.
+
+        The table is added empty (declared-but-unloaded); populate it with
+        :meth:`load_managed_table`. Use this to evolve a managed database's
+        schema after creation without recreating it.
+        """
+        db = self.resolve_managed_database(database)
+        request = AddManagedTableRequest(name=table)
+        try:
+            self._databases_api().add_database_table(db.id, schema, request)
+        except ApiException as e:
+            raise RuntimeError(api_error_message(e)) from e
+        return ManagedTable(
+            full_name=f"{db.id}.{schema}.{table}",
+            schema=schema,
+            table=table,
+            synced=False,
+            last_sync=None,
         )
 
     def delete_managed_table(
