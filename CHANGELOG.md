@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.6.0] - 2026-06-30
+
 ### Added
 
 - `HotdataClient.add_managed_table(database, table, *, schema)` declares a new table on an existing managed database (wrapping the SDK `add_database_table` endpoint). This allows additive schema evolution without recreating the database.
-
 
 ## [0.5.0] - 2026-06-28
 
