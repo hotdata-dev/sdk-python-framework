@@ -1,8 +1,7 @@
 """Error message construction: the API's response body must survive.
 
 "400: Bad Request" alone is undebuggable; the body carries the server's
-actual explanation (e.g. which header was missing). Regression for the
-opaque load failures in dlthubworker#70.
+actual explanation (e.g. which header was missing).
 """
 
 from __future__ import annotations

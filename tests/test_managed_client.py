@@ -107,8 +107,7 @@ def test_fetch_table_carries_database_scope_on_result_reads(
     hotdata 0.6.0 SDK exposes ``x_database_id`` on all three.
 
     Regression: reruns/append loads against an existing synced table failed
-    with an opaque ``400: Bad Request`` (dlthubworker#70) because both reads
-    omitted the scope.
+    with an opaque ``400: Bad Request`` because both reads omitted the scope.
     """
     result_scopes: list[str | None] = []
     arrow_scopes: list[str | None] = []
