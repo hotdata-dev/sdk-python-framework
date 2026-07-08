@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.6.2] - 2026-07-08
+
 ### Changed
 
 - Repository text cleanup: the changelog and test docstrings no longer reference external issue trackers. No functional changes; 0.6.2 is byte-identical to 0.6.1 in package code.
-
 
 ## [0.6.1] - 2026-07-08
 
