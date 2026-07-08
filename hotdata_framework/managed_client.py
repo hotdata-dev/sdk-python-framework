@@ -61,6 +61,7 @@ class ManagedDatabaseClient:
         api_base_url: str,
         max_retries: int,
         retry_backoff_seconds: float,
+        request_timeout: float | tuple[float, float] | None = None,
     ) -> None:
         self._max_retries = max_retries
         self._retry_backoff_seconds = retry_backoff_seconds
@@ -68,6 +69,7 @@ class ManagedDatabaseClient:
             api_key,
             workspace_id,
             host=api_base_url.rstrip("/"),
+            request_timeout=request_timeout,
         )
 
     def close(self) -> None:
