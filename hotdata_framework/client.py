@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
@@ -71,6 +72,45 @@ class RunHistoryItem:
         return asdict(self)
 
 
+
+def apply_default_request_timeout(
+    api_client: ApiClient, timeout: float | tuple[float, float]
+) -> None:
+    """Give every request through this client a socket-level deadline.
+
+    The generated client forwards ``_request_timeout=None`` — urllib3's
+    no-timeout — on every call unless the caller passes one explicitly, and
+    most helper methods expose no such knob. A stalled or black-holed server
+    therefore blocks the calling thread indefinitely. Wrapping the REST seam
+    applies ``timeout`` (seconds, or a ``(connect, read)`` pair) as the
+    default while still honoring an explicit per-call ``_request_timeout``.
+    """
+    rest_client = api_client.rest_client
+    original = rest_client.request
+
+    @functools.wraps(original)
+    def request_with_default_timeout(
+        method,
+        url,
+        headers=None,
+        body=None,
+        post_params=None,
+        _request_timeout=None,
+    ):
+        if _request_timeout is None:
+            _request_timeout = timeout
+        return original(
+            method,
+            url,
+            headers=headers,
+            body=body,
+            post_params=post_params,
+            _request_timeout=_request_timeout,
+        )
+
+    rest_client.request = request_with_default_timeout
+
+
 class HotdataClient:
     """Thin wrapper around the Hotdata Python SDK with query polling helpers."""
 
@@ -81,6 +121,7 @@ class HotdataClient:
         *,
         host: str | None = None,
         session_id: str | None = None,
+        request_timeout: float | tuple[float, float] | None = None,
     ) -> None:
         self._host = normalize_host(host) if host else default_host()
         self._api_key = api_key
@@ -94,6 +135,8 @@ class HotdataClient:
             retries=default_http_retries(),
         )
         self._api = ApiClient(self._config)
+        if request_timeout is not None:
+            apply_default_request_timeout(self._api, request_timeout)
 
     @classmethod
     def from_env(cls) -> HotdataClient:
