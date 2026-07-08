@@ -118,17 +118,13 @@ class ManagedDatabaseClient:
         """Fetch a ready result as Arrow, carrying the database scope.
 
         Results of database-scoped queries are themselves database-scoped —
-        the results endpoints reject requests without an ``X-Database-Id``
-        header. The Arrow helper takes no per-call headers, so the header is
-        set as a client default for the duration of the call and removed
-        after (this client is not shared across threads).
+        the results endpoints reject requests without the scope. The hotdata
+        0.6.0 SDK exposes (and requires) ``x_database_id`` on the Arrow
+        helper directly.
         """
-        api = self._runtime.api
-        api.set_default_header("X-Database-Id", database_id)
-        try:
-            return ArrowResultsApi(api).get_result_arrow(result_id)
-        finally:
-            api.default_headers.pop("X-Database-Id", None)
+        return ArrowResultsApi(self._runtime.api).get_result_arrow(
+            result_id, x_database_id=database_id
+        )
 
     def _poll(
         self,
@@ -172,9 +168,7 @@ class ManagedDatabaseClient:
         runs = QueryRunsApi(self._runtime.api)
         run = self._poll(
             # Runs (like results) of database-scoped queries are database-scoped.
-            lambda: runs.get_query_run(
-                query_run_id, _headers={"X-Database-Id": database_id}
-            ),
+            lambda: runs.get_query_run(query_run_id, x_database_id=database_id),
             is_ready=lambda r: r.status == "succeeded",
             describe="Query",
         )
@@ -186,10 +180,8 @@ class ManagedDatabaseClient:
         results = ResultsApi(self._runtime.api)
         self._poll(
             # The stored result of a database-scoped query 400s without the
-            # database scope header.
-            lambda: results.get_result(
-                result_id, _headers={"X-Database-Id": database_id}
-            ),
+            # database scope.
+            lambda: results.get_result(result_id, x_database_id=database_id),
             is_ready=lambda r: r.status == "ready",
             describe=f"Result {result_id}",
         )

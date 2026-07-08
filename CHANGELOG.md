@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ManagedDatabaseClient.fetch_table` now carries the `X-Database-Id` scope header on the result poll, the query-run poll, and the Arrow fetch — not only on the query submit. Results of database-scoped queries are themselves database-scoped, so every read against an existing synced table (merge/append loads, dlt state restore) failed with `400: Bad Request` once the table had data (dlthubworker#70).
 - API error messages now include the response body (flattened, truncated to 500 chars). `400: Bad Request` alone hid the server's actual explanation.
 
+### Changed
+
+- The `hotdata` SDK dependency is now `>=0.6.0`, and the scope above rides its native `x_database_id` parameters (`get_result`, `get_query_run`, `get_result_arrow`). Note 0.6.0 made `x_database_id` **required** on `get_result_arrow`, so older framework releases cannot run on it.
+
 ## [0.6.0] - 2026-06-30
 
 ### Added

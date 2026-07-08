@@ -59,7 +59,7 @@ def test_fetch_table_waits_for_ready_before_arrow(monkeypatch: pytest.MonkeyPatc
         def __init__(self, api: object) -> None:
             pass
 
-        def get_result_arrow(self, result_id: str) -> pa.Table:
+        def get_result_arrow(self, result_id: str, **kwargs: Any) -> pa.Table:
             calls.append("arrow")
             return pa.table({"id": [1, 2]})
 
@@ -87,19 +87,9 @@ def test_fetch_table_waits_for_ready_before_arrow(monkeypatch: pytest.MonkeyPatc
     assert calls.index("arrow") > calls.index("get_result:ready")
 
 
-class _FakeApiClient:
-    """Just enough of the generated ApiClient's default-header surface."""
-
-    def __init__(self) -> None:
-        self.default_headers: dict[str, str] = {}
-
-    def set_default_header(self, name: str, value: str) -> None:
-        self.default_headers[name] = value
-
-
-def _fake_runtime(api: object | None = None) -> SimpleNamespace:
+def _fake_runtime() -> SimpleNamespace:
     return SimpleNamespace(
-        api=api if api is not None else _FakeApiClient(),
+        api=object(),
         resolve_managed_database=lambda name: SimpleNamespace(id="db1", default_connection_id="c"),
         list_managed_tables=lambda database, schema=None: [
             SimpleNamespace(table="orders", synced=True)
@@ -112,16 +102,16 @@ def test_fetch_table_carries_database_scope_on_result_reads(
 ) -> None:
     """Results (and runs) of a database-scoped query are database-scoped:
     the results endpoints 400 with "X-Database-Id header is required" when
-    the header is missing. ``fetch_table`` must carry the database id on the
-    result poll and the Arrow fetch, not only on the query submit.
+    the scope is missing. ``fetch_table`` must carry the database id on the
+    result poll and the Arrow fetch, not only on the query submit — the
+    hotdata 0.6.0 SDK exposes ``x_database_id`` on all three.
 
     Regression: reruns/append loads against an existing synced table failed
     with an opaque ``400: Bad Request`` (dlthubworker#70) because both reads
-    omitted the header.
+    omitted the scope.
     """
-    seen_headers: list[dict[str, Any] | None] = []
-    arrow_headers: list[str | None] = []
-    fake_api = _FakeApiClient()
+    result_scopes: list[str | None] = []
+    arrow_scopes: list[str | None] = []
 
     class FakeQueryApi:
         def __init__(self, api: object) -> None:
@@ -135,17 +125,18 @@ def test_fetch_table_carries_database_scope_on_result_reads(
         def __init__(self, api: object) -> None:
             pass
 
-        def get_result(self, result_id: str, *, _headers: dict[str, Any] | None = None) -> Any:
-            seen_headers.append(_headers)
+        def get_result(self, result_id: str, *, x_database_id: str | None = None) -> Any:
+            result_scopes.append(x_database_id)
             return SimpleNamespace(status="ready", result_id=result_id, error_message=None)
 
     class FakeArrowResultsApi:
-        def __init__(self, api: _FakeApiClient) -> None:
-            self._api = api
+        def __init__(self, api: object) -> None:
+            pass
 
-        def get_result_arrow(self, result_id: str) -> pa.Table:
-            # The scoped default header must be present DURING the fetch.
-            arrow_headers.append(self._api.default_headers.get("X-Database-Id"))
+        # x_database_id is REQUIRED in the 0.6.0 SDK — mirroring that here
+        # makes this test fail if a caller ever drops the scope again.
+        def get_result_arrow(self, result_id: str, *, x_database_id: str) -> pa.Table:
+            arrow_scopes.append(x_database_id)
             return pa.table({"id": [1]})
 
     monkeypatch.setattr(mc, "QueryApi", FakeQueryApi)
@@ -159,12 +150,10 @@ def test_fetch_table_carries_database_scope_on_result_reads(
         max_retries=1,
         retry_backoff_seconds=0.0,
     )
-    client._runtime = _fake_runtime(fake_api)
+    client._runtime = _fake_runtime()
 
     table = client.fetch_table(database="mydb", schema="public", table="orders")
 
     assert table is not None
-    assert seen_headers == [{"X-Database-Id": "db1"}]
-    assert arrow_headers == ["db1"]
-    # The scoped header is removed once the fetch completes.
-    assert "X-Database-Id" not in fake_api.default_headers
+    assert result_scopes == ["db1"]
+    assert arrow_scopes == ["db1"]
