@@ -58,4 +58,9 @@ def managed_database_from_detail(detail: Any) -> ManagedDatabase:
 
 
 def api_error_message(exc: ApiException) -> str:
-    return exc.reason or str(exc)
+    reason = exc.reason or str(exc)
+    # Keep the response body: it carries the API's actual explanation.
+    body = getattr(exc, "body", None)
+    if body:
+        return f"{reason}: {' '.join(str(body).split())[:500]}"
+    return reason
