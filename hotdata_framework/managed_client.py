@@ -110,9 +110,25 @@ class ManagedDatabaseClient:
             result_id = self._query_database_scoped(sql, database_id=db.id)
             if result_id is None:
                 return None
-            return ArrowResultsApi(self._runtime.api).get_result_arrow(result_id)
+            return self._fetch_result_arrow(result_id, database_id=db.id)
 
         return self._request_with_retry(operation)
+
+    def _fetch_result_arrow(self, result_id: str, *, database_id: str) -> pa.Table:
+        """Fetch a ready result as Arrow, carrying the database scope.
+
+        Results of database-scoped queries are themselves database-scoped —
+        the results endpoints reject requests without an ``X-Database-Id``
+        header. The Arrow helper takes no per-call headers, so the header is
+        set as a client default for the duration of the call and removed
+        after (this client is not shared across threads).
+        """
+        api = self._runtime.api
+        api.set_default_header("X-Database-Id", database_id)
+        try:
+            return ArrowResultsApi(api).get_result_arrow(result_id)
+        finally:
+            api.default_headers.pop("X-Database-Id", None)
 
     def _poll(
         self,
@@ -146,26 +162,34 @@ class ManagedDatabaseClient:
             # under ``result_id``; that result may be ``processing`` when the
             # inline preview returns, so wait for ``ready`` before the caller
             # fetches it as Arrow.
-            return self._wait_result_ready(raw.result_id)
+            return self._wait_result_ready(raw.result_id, database_id=database_id)
         if isinstance(raw, AsyncQueryResponse):
-            return self._wait_result_ready(self._await_query_run(raw.query_run_id))
+            run_result = self._await_query_run(raw.query_run_id, database_id=database_id)
+            return self._wait_result_ready(run_result, database_id=database_id)
         return None
 
-    def _await_query_run(self, query_run_id: str) -> str | None:
+    def _await_query_run(self, query_run_id: str, *, database_id: str) -> str | None:
         runs = QueryRunsApi(self._runtime.api)
         run = self._poll(
-            lambda: runs.get_query_run(query_run_id),
+            # Runs (like results) of database-scoped queries are database-scoped.
+            lambda: runs.get_query_run(
+                query_run_id, _headers={"X-Database-Id": database_id}
+            ),
             is_ready=lambda r: r.status == "succeeded",
             describe="Query",
         )
         return run.result_id
 
-    def _wait_result_ready(self, result_id: str | None) -> str | None:
+    def _wait_result_ready(self, result_id: str | None, *, database_id: str) -> str | None:
         if result_id is None:
             return None
         results = ResultsApi(self._runtime.api)
         self._poll(
-            lambda: results.get_result(result_id),
+            # The stored result of a database-scoped query 400s without the
+            # database scope header.
+            lambda: results.get_result(
+                result_id, _headers={"X-Database-Id": database_id}
+            ),
             is_ready=lambda r: r.status == "ready",
             describe=f"Result {result_id}",
         )

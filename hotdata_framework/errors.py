@@ -23,6 +23,11 @@ def classify_sdk_error(error: Exception) -> HotdataError:
     if isinstance(error, ApiException):
         status_code = int(error.status or 0)
         message = f"{status_code}: {error.reason or 'unknown error'}"
+        # The response body is where the API explains itself (e.g. which
+        # header is missing) — without it "400: Bad Request" is undebuggable.
+        body = getattr(error, "body", None)
+        if body:
+            message = f"{message} — {' '.join(str(body).split())[:500]}"
         if status_code in (408, 409, 425, 429):
             return HotdataTransientError(message)
         if 500 <= status_code <= 599:
