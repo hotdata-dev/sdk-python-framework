@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.6.3] - 2026-07-08
+
 ### Added
 
 - `HotdataClient` and `ManagedDatabaseClient` accept `request_timeout` (seconds, or a `(connect, read)` pair). The generated SDK otherwise issues every HTTP request with urllib3's no-timeout default, so a stalled or unreachable server blocks the calling thread indefinitely; the new parameter applies a socket-level deadline to every call through the client while still honoring an explicit per-call `_request_timeout`. Also exported as `apply_default_request_timeout(api_client, timeout)` for callers holding a raw generated client. Default remains no timeout (behavior unchanged unless opted in).
