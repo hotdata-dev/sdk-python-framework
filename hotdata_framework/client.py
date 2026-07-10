@@ -241,14 +241,26 @@ class HotdataClient:
         *,
         schema: str = DEFAULT_SCHEMA,
         tables: list[str] | None = None,
+        keys: dict[str, list[str]] | None = None,
         expires_at: str | None = None,
     ) -> ManagedDatabase:
+        """Create a managed database with its default-catalog tables.
+
+        ``keys`` maps a table name to the columns that identify a row; declaring
+        a key enables the key-based load modes (``delete`` / ``update`` /
+        ``upsert``) on that table. Tables absent from ``keys`` (or with an empty
+        list) are declared keyless and support only ``replace`` / ``append``.
+        """
+        keys = keys or {}
         schemas = None
         if tables:
             schemas = [
                 DatabaseDefaultSchemaDecl(
                     name=schema,
-                    tables=[DatabaseDefaultTableDecl(name=t) for t in tables],
+                    tables=[
+                        DatabaseDefaultTableDecl(name=t, key=list(keys.get(t, [])))
+                        for t in tables
+                    ],
                 )
             ]
         request = CreateDatabaseRequest(
@@ -314,6 +326,7 @@ class HotdataClient:
         schema: str = DEFAULT_SCHEMA,
         upload_id: str | None = None,
         file: str | None = None,
+        mode: str = "replace",
     ) -> LoadManagedTableResult:
         if (upload_id is None) == (file is None):
             raise ValueError("Exactly one of upload_id or file is required")
@@ -324,7 +337,7 @@ class HotdataClient:
             assert file is not None
             resolved_upload_id = self.upload_parquet(file)
         request = LoadManagedTableRequest(
-            mode="replace",
+            mode=mode,
             upload_id=resolved_upload_id,
         )
         try:
@@ -350,15 +363,18 @@ class HotdataClient:
         table: str,
         *,
         schema: str = DEFAULT_SCHEMA,
+        key: list[str] | None = None,
     ) -> ManagedTable:
         """Declare a new table on an existing managed database.
 
         The table is added empty (declared-but-unloaded); populate it with
         :meth:`load_managed_table`. Use this to evolve a managed database's
-        schema after creation without recreating it.
+        schema after creation without recreating it. ``key`` declares the row
+        identity columns that enable the key-based load modes (``delete`` /
+        ``update`` / ``upsert``); omit it for a keyless table.
         """
         db = self.resolve_managed_database(database)
-        request = AddManagedTableRequest(name=table)
+        request = AddManagedTableRequest(name=table, key=list(key or []))
         try:
             self._databases_api().add_database_table(db.id, schema, request)
         except ApiException as e:
