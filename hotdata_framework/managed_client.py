@@ -203,6 +203,7 @@ class ManagedDatabaseClient:
         *,
         schema: str,
         upload_id: str,
+        mode: str = "replace",
     ) -> LoadManagedTableResult:
         return self._request_with_retry(
             lambda: self._runtime.load_managed_table(
@@ -210,6 +211,7 @@ class ManagedDatabaseClient:
                 table,
                 schema=schema,
                 upload_id=upload_id,
+                mode=mode,
             )
         )
 

@@ -5,11 +5,26 @@ from unittest.mock import mock_open, patch
 
 import pytest
 from hotdata.exceptions import ApiException
+from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
 
 from hotdata_framework.client import HotdataClient
 from hotdata_framework.databases import (
     is_parquet_path,
     managed_database_from_detail,
+)
+
+
+def _decl_key_supported() -> bool:
+    # `key` ships with the regenerated client; the key tests activate once it does.
+    try:
+        return DatabaseDefaultTableDecl(name="t", key=["k"]).key == ["k"]
+    except Exception:
+        return False
+
+
+requires_key_field = pytest.mark.skipif(
+    not _decl_key_supported(),
+    reason="hotdata client without `key` on managed-table decls",
 )
 
 
@@ -228,6 +243,69 @@ def test_load_managed_table_requires_exactly_one_source():
             upload_id="upl_1",
             file="/tmp/x.parquet",
         )
+
+
+def _load_and_capture_request(client, **kwargs):
+    db = managed_database_from_detail(_detail())
+    loaded = SimpleNamespace(
+        connection_id="conn_1", schema_name="public", table_name="orders", row_count=1
+    )
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "connections") as connections,
+    ):
+        connections.return_value.load_managed_table.return_value = loaded
+        client.load_managed_table("db_1", "orders", upload_id="upl_1", **kwargs)
+    return connections.return_value.load_managed_table.call_args.args[3]
+
+
+def test_load_managed_table_defaults_to_replace():
+    assert _load_and_capture_request(_client()).mode == "replace"
+
+
+@pytest.mark.parametrize("mode", ["append", "delete", "update", "upsert"])
+def test_load_managed_table_forwards_mode(mode: str):
+    assert _load_and_capture_request(_client(), mode=mode).mode == mode
+
+
+@requires_key_field
+def test_create_managed_database_declares_keys():
+    client = _client()
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.create_database.return_value = _detail(id="db_new")
+        client.create_managed_database(
+            "mydb", tables=["orders", "events"], keys={"orders": ["id"]}
+        )
+    req = dbs.return_value.create_database.call_args.args[0]
+    declared = {t.name: list(t.key) for t in req.schemas[0].tables}
+    assert declared == {"orders": ["id"], "events": []}
+
+
+@requires_key_field
+def test_add_managed_table_declares_key():
+    client = _client()
+    db = managed_database_from_detail(_detail())
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "_databases_api") as dbs,
+    ):
+        client.add_managed_table("db_1", "line_items", key=["order_id", "sku"])
+    req = dbs.return_value.add_database_table.call_args.args[2]
+    assert req.name == "line_items"
+    assert list(req.key) == ["order_id", "sku"]
+
+
+@requires_key_field
+def test_add_managed_table_keyless_by_default():
+    client = _client()
+    db = managed_database_from_detail(_detail())
+    with (
+        patch.object(client, "resolve_managed_database", return_value=db),
+        patch.object(client, "_databases_api") as dbs,
+    ):
+        client.add_managed_table("db_1", "orders")
+    req = dbs.return_value.add_database_table.call_args.args[2]
+    assert list(req.key) == []
 
 
 def test_delete_managed_table_uses_default_connection_id():
