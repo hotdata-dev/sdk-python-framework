@@ -26,9 +26,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  # TODO(release): pin the floor to the client version that adds `key` to the
-  # managed-table decl models (DatabaseDefaultTableDecl / AddManagedTableRequest).
-  # `create_managed_database(keys=...)` / `add_managed_table(key=...)` require it.
+  # 0.7.0 adds `key` to table decls (create_managed_database(keys=) / add_managed_table(key=))
   "hotdata>=0.7.0",
   "pandas>=2.0",
   "pyarrow>=14.0",

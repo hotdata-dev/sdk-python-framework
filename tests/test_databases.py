@@ -8,11 +8,14 @@ from hotdata.exceptions import ApiException
 from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
 
 from hotdata_framework.client import HotdataClient
+from hotdata_framework.databases import (
+    is_parquet_path,
+    managed_database_from_detail,
+)
 
 
 def _decl_key_supported() -> bool:
-    # The `key` field on the managed-table decls ships in a regenerated client;
-    # the key tests below activate once it's present.
+    # `key` ships with the regenerated client; the key tests activate once it does.
     try:
         return DatabaseDefaultTableDecl(name="t", key=["k"]).key == ["k"]
     except Exception:
@@ -22,10 +25,6 @@ def _decl_key_supported() -> bool:
 requires_key_field = pytest.mark.skipif(
     not _decl_key_supported(),
     reason="hotdata client without `key` on managed-table decls",
-)
-from hotdata_framework.databases import (
-    is_parquet_path,
-    managed_database_from_detail,
 )
 
 

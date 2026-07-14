@@ -244,13 +244,8 @@ class HotdataClient:
         keys: dict[str, list[str]] | None = None,
         expires_at: str | None = None,
     ) -> ManagedDatabase:
-        """Create a managed database with its default-catalog tables.
-
-        ``keys`` maps a table name to the columns that identify a row; declaring
-        a key enables the key-based load modes (``delete`` / ``update`` /
-        ``upsert``) on that table. Tables absent from ``keys`` (or with an empty
-        list) are declared keyless and support only ``replace`` / ``append``.
-        """
+        """Create a managed database. ``keys`` maps a table to its key columns
+        (enabling delete/update/upsert on it); omitted tables are keyless."""
         keys = keys or {}
         schemas = None
         if tables:
@@ -369,9 +364,8 @@ class HotdataClient:
 
         The table is added empty (declared-but-unloaded); populate it with
         :meth:`load_managed_table`. Use this to evolve a managed database's
-        schema after creation without recreating it. ``key`` declares the row
-        identity columns that enable the key-based load modes (``delete`` /
-        ``update`` / ``upsert``); omit it for a keyless table.
+        schema after creation without recreating it. ``key`` sets the
+        row-identity columns for delete/update/upsert; omit for keyless.
         """
         db = self.resolve_managed_database(database)
         request = AddManagedTableRequest(name=table, key=list(key or []))
