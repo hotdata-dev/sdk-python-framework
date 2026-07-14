@@ -4,7 +4,7 @@ import functools
 import time
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal
 
 from hotdata import ApiClient, Configuration
 from hotdata.api.connections_api import ConnectionsApi
@@ -45,6 +45,10 @@ from hotdata_framework.env import (
 )
 from hotdata_framework.http import default_http_retries
 from hotdata_framework.result import QueryResult
+
+# Load modes the managed-table endpoint accepts: replace overwrites, append adds
+# rows, delete/update/upsert match by the table's declared key.
+ManagedLoadMode = Literal["replace", "append", "delete", "update", "upsert"]
 
 _TERMINAL = frozenset({"succeeded", "failed", "cancelled"})
 _RESULT_FAILURE = frozenset({"failed", "cancelled"})
@@ -321,7 +325,7 @@ class HotdataClient:
         schema: str = DEFAULT_SCHEMA,
         upload_id: str | None = None,
         file: str | None = None,
-        mode: str = "replace",
+        mode: ManagedLoadMode = "replace",
     ) -> LoadManagedTableResult:
         if (upload_id is None) == (file is None):
             raise ValueError("Exactly one of upload_id or file is required")

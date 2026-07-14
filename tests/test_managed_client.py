@@ -156,3 +156,56 @@ def test_fetch_table_carries_database_scope_on_result_reads(
     assert table is not None
     assert result_scopes == ["db1"]
     assert arrow_scopes == ["db1"]
+
+
+def _load_recording_runtime(calls: list[str]) -> SimpleNamespace:
+    """A runtime whose ``load_managed_table`` records each mode and always fails
+    with a transient error, so retry behaviour is observable via ``calls``."""
+
+    def load_managed_table(
+        database: str, table: str, *, schema: str, upload_id: str, mode: str
+    ) -> SimpleNamespace:
+        calls.append(mode)
+        raise TimeoutError("commit succeeded but response was lost")
+
+    runtime = _fake_runtime()
+    runtime.load_managed_table = load_managed_table
+    return runtime
+
+
+def _managed_client(max_retries: int) -> Any:
+    return mc.ManagedDatabaseClient(
+        api_key="k",
+        workspace_id="w",
+        api_base_url="https://example.test",
+        max_retries=max_retries,
+        retry_backoff_seconds=0.0,
+    )
+
+
+def test_append_load_runs_at_most_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``append`` is not idempotent: retrying after a commit whose response was
+    lost would duplicate rows. A transient failure must surface immediately
+    without re-appending, even with retries budgeted."""
+    monkeypatch.setattr(mc.time, "sleep", lambda _seconds: None)
+    calls: list[str] = []
+    client = _managed_client(max_retries=8)
+    client._runtime = _load_recording_runtime(calls)
+
+    with pytest.raises(mc.HotdataTransientError):
+        client.load_managed_table("db", "orders", schema="public", upload_id="u1", mode="append")
+
+    assert calls == ["append"]  # tried once, never retried
+
+
+def test_idempotent_load_retries_on_transient(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Idempotent modes still exhaust the retry budget on transient errors."""
+    monkeypatch.setattr(mc.time, "sleep", lambda _seconds: None)
+    calls: list[str] = []
+    client = _managed_client(max_retries=3)
+    client._runtime = _load_recording_runtime(calls)
+
+    with pytest.raises(mc.HotdataTransientError):
+        client.load_managed_table("db", "orders", schema="public", upload_id="u1", mode="replace")
+
+    assert calls == ["replace", "replace", "replace"]  # retried up to max_retries

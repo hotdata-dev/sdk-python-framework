@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `load_managed_table(..., mode=...)` selects the load mode (`replace` (default), `append`, `delete`, `update`, `upsert`) instead of always replacing the table. `replace`/`append` apply the upload directly; `delete`/`update`/`upsert` match rows by the table's declared key. Backward compatible — omitting `mode` still replaces.
 - `create_managed_database(..., keys={table: [cols]})` and `add_managed_table(..., key=[cols])` declare a table's row-identity key, enabling the key-based load modes on it. Requires a `hotdata` client whose managed-table decl models carry `key` (see the dependency floor bump); tables declared without a key stay `replace`/`append`-only.
 
+### Fixed
+
+- `load_managed_table(..., mode="append")` is no longer retried on transient errors. Every other mode is idempotent, but retrying an `append` whose commit succeeded before the response was received would duplicate the uploaded rows; `append` now runs at most once. `mode` is also now typed as a literal of the accepted values.
+
 ## [0.6.3] - 2026-07-08
 
 ### Added
