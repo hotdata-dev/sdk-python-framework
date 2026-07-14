@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.7.0] - 2026-07-14
+
 ### Added
 
 - `load_managed_table(..., mode=...)` selects the load mode (`replace` (default), `append`, `delete`, `update`, `upsert`) instead of always replacing the table. `replace`/`append` apply the upload directly; `delete`/`update`/`upsert` match rows by the table's declared key. Backward compatible — omitting `mode` still replaces.
