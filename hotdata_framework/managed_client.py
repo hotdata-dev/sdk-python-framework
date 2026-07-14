@@ -21,6 +21,7 @@ from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
 
 from hotdata_framework.client import HotdataClient as RuntimeClient
+from hotdata_framework.client import ManagedLoadMode
 from hotdata_framework.databases import LoadManagedTableResult, ManagedDatabase
 from hotdata_framework.errors import (
     HotdataTransientError,
@@ -203,8 +204,11 @@ class ManagedDatabaseClient:
         *,
         schema: str,
         upload_id: str,
-        mode: str = "replace",
+        mode: ManagedLoadMode = "replace",
     ) -> LoadManagedTableResult:
+        # append is the only non-idempotent mode: if the server commits the load
+        # but the response is lost, a retry re-appends the same rows. Run it
+        # at-most-once; every other mode is safe to retry.
         return self._request_with_retry(
             lambda: self._runtime.load_managed_table(
                 database,
@@ -212,16 +216,18 @@ class ManagedDatabaseClient:
                 schema=schema,
                 upload_id=upload_id,
                 mode=mode,
-            )
+            ),
+            retryable=(mode != "append"),
         )
 
-    def _request_with_retry(self, operation: Callable[[], T]) -> T:
-        for attempt in range(1, self._max_retries + 1):
+    def _request_with_retry(self, operation: Callable[[], T], *, retryable: bool = True) -> T:
+        max_attempts = self._max_retries if retryable else 1
+        for attempt in range(1, max_attempts + 1):
             try:
                 return operation()
             except Exception as error:
                 mapped_error = classify_sdk_error(error.__cause__ or error)
-                if isinstance(mapped_error, HotdataTransientError) and attempt < self._max_retries:
+                if isinstance(mapped_error, HotdataTransientError) and attempt < max_attempts:
                     backoff = min(self._retry_backoff_seconds * attempt, self._MAX_BACKOFF_SECONDS)
                     time.sleep(backoff)
                     continue
