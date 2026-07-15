@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import functools
+import os
 import time
+import urllib3
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
@@ -20,6 +22,9 @@ from hotdata.models.async_query_response import AsyncQueryResponse
 from hotdata.models.create_database_request import CreateDatabaseRequest
 from hotdata.models.database_default_schema_decl import DatabaseDefaultSchemaDecl
 from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
+from hotdata.models.create_upload_request import CreateUploadRequest
+from hotdata.models.finalize_upload_part import FinalizeUploadPart
+from hotdata.models.finalize_upload_request import FinalizeUploadRequest
 from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
@@ -306,6 +311,71 @@ class HotdataClient:
     def upload_parquet(self, path: str) -> str:
         if not is_parquet_path(path):
             raise ValueError(f"Managed table loads require a parquet file (got {path!r})")
+        file_size = os.path.getsize(path)
+        try:
+            session = self.uploads().create_upload_session_handler(
+                CreateUploadRequest(
+                    declared_size_bytes=file_size,
+                    content_type="application/octet-stream",
+                )
+            )
+        except ApiException as e:
+            if e.status == 501:
+                return self._upload_parquet_post(path)
+            raise RuntimeError(api_error_message(e)) from e
+        http = urllib3.PoolManager()
+        parts: list[FinalizeUploadPart] | None = None
+        try:
+            if session.mode == "single":
+                with open(path, "rb") as f:
+                    data = f.read()
+                resp = http.request(
+                    "PUT",
+                    session.url,
+                    body=data,
+                    headers={"Content-Length": str(file_size), **session.headers},
+                )
+                if resp.status not in (200, 201, 204):
+                    raise RuntimeError(f"Storage PUT failed: HTTP {resp.status}")
+            else:
+                collected: list[FinalizeUploadPart] = []
+                with open(path, "rb") as f:
+                    for i, part_url in enumerate(session.part_urls):
+                        chunk = f.read(session.part_size)
+                        resp = http.request(
+                            "PUT",
+                            part_url,
+                            body=chunk,
+                            headers={
+                                "Content-Length": str(len(chunk)),
+                                **session.headers,
+                            },
+                        )
+                        if resp.status not in (200, 201, 204):
+                            raise RuntimeError(
+                                f"Part {i + 1} PUT failed: HTTP {resp.status}"
+                            )
+                        collected.append(
+                            FinalizeUploadPart(
+                                part_number=i + 1,
+                                e_tag=resp.headers["ETag"],
+                            )
+                        )
+                parts = collected
+        finally:
+            http.clear()
+        try:
+            finalized = self.uploads().finalize_upload_handler(
+                upload_id=session.upload_id,
+                x_upload_finalize_token=session.finalize_token,
+                finalize_upload_request=FinalizeUploadRequest(parts=parts),
+            )
+        except ApiException as e:
+            raise RuntimeError(api_error_message(e)) from e
+        return finalized.upload_id
+
+    def _upload_parquet_post(self, path: str) -> str:
+        """Fallback for storage backends that do not support presigned URLs (501)."""
         with open(path, "rb") as f:
             data = f.read()
         try:
