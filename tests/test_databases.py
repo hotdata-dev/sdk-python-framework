@@ -278,9 +278,8 @@ def test_upload_parquet_single_put():
     assert call_args.args[1] == "https://s/put"
 
 
-def test_upload_parquet_fallback_on_501():
+def test_upload_parquet_raises_on_501():
     client = _client()
-    uploaded = SimpleNamespace(id="upl_post")
 
     with (
         patch("builtins.open", mock_open(read_data=b"PAR1")),
@@ -289,11 +288,50 @@ def test_upload_parquet_fallback_on_501():
     ):
         err = ApiException(status=501)
         uploads.return_value.create_upload_session_handler.side_effect = err
-        uploads.return_value.upload_file.return_value = uploaded
 
-        upload_id = client.upload_parquet("/tmp/data.parquet")
+        with pytest.raises(RuntimeError, match="presigned uploads"):
+            client.upload_parquet("/tmp/data.parquet")
 
-    assert upload_id == "upl_post"
+    uploads.return_value.upload_file.assert_not_called()
+
+
+def test_upload_parquet_multipart_reads_are_part_size_bounded():
+    """The OOM fix: multipart mode must never read more than part_size at once."""
+    client = _client()
+    part_size = 5
+    data = b"PAR1" + b"\x00" * 9  # 13 bytes -> parts of 5, 5, 3
+    read_sizes: list[int] = []
+
+    class _TrackingFile(io.BytesIO):
+        def read(self, n=-1):
+            read_sizes.append(n)
+            return super().read(n)
+
+    bio = _TrackingFile(data)
+    handle = MagicMock()
+    handle.__enter__ = lambda s: bio
+    handle.__exit__ = MagicMock(return_value=False)
+    session = _session(
+        "multipart", part_size=part_size, part_urls=["https://s/1", "https://s/2", "https://s/3"]
+    )
+    finalized = SimpleNamespace(upload_id="upl_final")
+
+    with (
+        patch("builtins.open", MagicMock(return_value=handle)),
+        patch("os.path.getsize", return_value=len(data)),
+        patch.object(client, "uploads") as uploads,
+        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
+    ):
+        pool = MockPool.return_value
+        pool.request.return_value = _http_resp()
+        pool.clear.return_value = None
+        uploads.return_value.create_upload_session_handler.return_value = session
+        uploads.return_value.finalize_upload_handler.return_value = finalized
+
+        client.upload_parquet("/tmp/data.parquet")
+
+    assert read_sizes, "expected chunked reads"
+    assert all(n == part_size for n in read_sizes)
 
 
 def test_load_managed_table_with_upload_id():

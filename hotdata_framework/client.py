@@ -321,7 +321,12 @@ class HotdataClient:
             )
         except ApiException as e:
             if e.status == 501:
-                return self._upload_parquet_post(path)
+                raise RuntimeError(
+                    "the server does not support presigned uploads (HTTP 501); "
+                    "managed table loads require a storage backend that can issue "
+                    "presigned URLs (the POST /v1/files fallback was removed in "
+                    "hotdata-framework 0.7.2)"
+                ) from e
             raise RuntimeError(api_error_message(e)) from e
         http = urllib3.PoolManager()
         parts: list[FinalizeUploadPart] | None = None
@@ -373,19 +378,6 @@ class HotdataClient:
         except ApiException as e:
             raise RuntimeError(api_error_message(e)) from e
         return finalized.upload_id
-
-    def _upload_parquet_post(self, path: str) -> str:
-        """Fallback for storage backends that do not support presigned URLs (501)."""
-        with open(path, "rb") as f:
-            data = f.read()
-        try:
-            uploaded = self.uploads().upload_file(
-                data,
-                _content_type="application/octet-stream",
-            )
-        except ApiException as e:
-            raise RuntimeError(api_error_message(e)) from e
-        return uploaded.id
 
     def load_managed_table(
         self,
