@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.7.2] - 2026-07-15
+
+### Removed
+
+- The `POST /v1/files` fallback in `upload_parquet()`. Presigned upload sessions (`POST /v1/uploads`) are now required; a server that responds 501 raises a clear `RuntimeError` instead of silently falling back to the full-file-in-memory upload path.
+
 ## [0.7.1] - 2026-07-15
 
 ### Changed
