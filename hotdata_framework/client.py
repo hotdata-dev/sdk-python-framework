@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import functools
-import os
 import time
-import urllib3
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
@@ -15,16 +13,15 @@ from hotdata.api.information_schema_api import InformationSchemaApi
 from hotdata.api.query_api import QueryApi
 from hotdata.api.query_runs_api import QueryRunsApi
 from hotdata.api.results_api import ResultsApi
-from hotdata.api.uploads_api import UploadsApi
+# The enriched wrapper (hotdata.uploads), NOT the generated hotdata.api class:
+# it adds the full upload_file orchestration used by upload_parquet.
+from hotdata.uploads import UploadError, UploadsApi
 from hotdata.exceptions import ApiException
 from hotdata.models.add_managed_table_request import AddManagedTableRequest
 from hotdata.models.async_query_response import AsyncQueryResponse
 from hotdata.models.create_database_request import CreateDatabaseRequest
 from hotdata.models.database_default_schema_decl import DatabaseDefaultSchemaDecl
 from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
-from hotdata.models.create_upload_request import CreateUploadRequest
-from hotdata.models.finalize_upload_part import FinalizeUploadPart
-from hotdata.models.finalize_upload_request import FinalizeUploadRequest
 from hotdata.models.load_managed_table_request import LoadManagedTableRequest
 from hotdata.models.query_request import QueryRequest
 from hotdata.models.query_response import QueryResponse
@@ -309,74 +306,29 @@ class HotdataClient:
         return rows
 
     def upload_parquet(self, path: str) -> str:
+        """Upload a parquet file via the SDK's upload orchestration.
+
+        ``UploadsApi.upload_file`` owns the whole session -> storage PUT ->
+        finalize flow: concurrent part uploads under a peak-memory budget,
+        per-part retries, and ETag/size validation. Errors surface with the
+        underlying ``ApiException`` as the direct cause when there is one, so
+        retry classification keeps seeing the status code.
+        """
         if not is_parquet_path(path):
             raise ValueError(f"Managed table loads require a parquet file (got {path!r})")
-        file_size = os.path.getsize(path)
         try:
-            session = self.uploads().create_upload_session_handler(
-                CreateUploadRequest(
-                    declared_size_bytes=file_size,
-                    content_type="application/octet-stream",
-                )
-            )
-        except ApiException as e:
-            if e.status == 501:
-                raise RuntimeError(
-                    "the server does not support presigned uploads (HTTP 501); "
-                    "managed table loads require a storage backend that can issue "
-                    "presigned URLs (the POST /v1/files fallback was removed in "
-                    "hotdata-framework 0.7.2)"
-                ) from e
-            raise RuntimeError(api_error_message(e)) from e
-        http = urllib3.PoolManager()
-        parts: list[FinalizeUploadPart] | None = None
-        try:
-            if session.mode == "single":
-                with open(path, "rb") as f:
-                    data = f.read()
-                resp = http.request(
-                    "PUT",
-                    session.url,
-                    body=data,
-                    headers={"Content-Length": str(file_size), **session.headers},
-                )
-                if resp.status not in (200, 201, 204):
-                    raise RuntimeError(f"Storage PUT failed: HTTP {resp.status}")
-            else:
-                collected: list[FinalizeUploadPart] = []
-                with open(path, "rb") as f:
-                    for i, part_url in enumerate(session.part_urls):
-                        chunk = f.read(session.part_size)
-                        resp = http.request(
-                            "PUT",
-                            part_url,
-                            body=chunk,
-                            headers={
-                                "Content-Length": str(len(chunk)),
-                                **session.headers,
-                            },
-                        )
-                        if resp.status not in (200, 201, 204):
-                            raise RuntimeError(
-                                f"Part {i + 1} PUT failed: HTTP {resp.status}"
-                            )
-                        collected.append(
-                            FinalizeUploadPart(
-                                part_number=i + 1,
-                                e_tag=resp.headers["ETag"],
-                            )
-                        )
-                parts = collected
-        finally:
-            http.clear()
-        try:
-            finalized = self.uploads().finalize_upload_handler(
-                upload_id=session.upload_id,
-                x_upload_finalize_token=session.finalize_token,
-                finalize_upload_request=FinalizeUploadRequest(parts=parts),
+            finalized = self.uploads().upload_file(
+                path, content_type="application/octet-stream"
             )
         except ApiException as e:
             raise RuntimeError(api_error_message(e)) from e
+        except UploadError as e:
+            node: BaseException | None = e
+            while node is not None and not isinstance(node, ApiException):
+                node = node.__cause__
+            if isinstance(node, ApiException):
+                raise RuntimeError(api_error_message(node)) from node
+            raise RuntimeError(str(e)) from e
         return finalized.upload_id
 
     def load_managed_table(

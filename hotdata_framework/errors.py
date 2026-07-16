@@ -30,6 +30,10 @@ def classify_sdk_error(error: Exception) -> HotdataError:
             message = f"{message} — {' '.join(str(body).split())[:500]}"
         if status_code in (408, 409, 425, 429):
             return HotdataTransientError(message)
+        if status_code == 501:
+            # Not Implemented is a permanent capability gap (e.g. the storage
+            # backend cannot issue presigned URLs) — retrying cannot succeed.
+            return HotdataTerminalError(message)
         if 500 <= status_code <= 599:
             return HotdataTransientError(message)
         return HotdataTerminalError(message)

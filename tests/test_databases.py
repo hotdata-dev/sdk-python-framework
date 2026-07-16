@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import io
 from types import SimpleNamespace
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import patch
 
 import pytest
 from hotdata.exceptions import ApiException
@@ -195,143 +194,61 @@ def test_upload_parquet_rejects_non_parquet():
         client.upload_parquet("/tmp/data.csv")
 
 
-def _mock_open_bytes(data: bytes) -> MagicMock:
-    """Return an open() mock whose file handle supports read(n) via BytesIO."""
-    bio = io.BytesIO(data)
-    m = MagicMock()
-    m.__enter__ = lambda s: bio
-    m.__exit__ = MagicMock(return_value=False)
-    return MagicMock(return_value=m)
-
-
-def _session(mode: str, **kw) -> SimpleNamespace:
-    defaults = dict(
-        upload_id="upl_sess",
-        finalize_token="tok",
-        headers={},
-        part_size=None,
-        part_urls=None,
-        url=None,
-    )
-    return SimpleNamespace(mode=mode, **{**defaults, **kw})
-
-
-def _http_resp(status: int = 200, etag: str = '"abc"') -> SimpleNamespace:
-    return SimpleNamespace(status=status, headers={"ETag": etag})
-
-
-def test_upload_parquet_multipart():
+def test_upload_parquet_delegates_to_sdk_upload_file():
     client = _client()
-    data = b"PAR1" + b"\x00" * 6  # 10 bytes -> 2 parts of 5
-    session = _session("multipart", part_size=5, part_urls=["https://s/1", "https://s/2"])
     finalized = SimpleNamespace(upload_id="upl_final")
 
-    with (
-        patch("builtins.open", _mock_open_bytes(data)),
-        patch("os.path.getsize", return_value=len(data)),
-        patch.object(client, "uploads") as uploads,
-        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
-    ):
-        pool = MockPool.return_value
-        pool.request.return_value = _http_resp()
-        pool.clear.return_value = None
-        uploads.return_value.create_upload_session_handler.return_value = session
-        uploads.return_value.finalize_upload_handler.return_value = finalized
-
+    with patch.object(client, "uploads") as uploads:
+        uploads.return_value.upload_file.return_value = finalized
         upload_id = client.upload_parquet("/tmp/data.parquet")
 
     assert upload_id == "upl_final"
-    assert pool.request.call_count == 2
-    finalize_call = uploads.return_value.finalize_upload_handler.call_args
-    assert finalize_call.kwargs["upload_id"] == "upl_sess"
-    assert finalize_call.kwargs["x_upload_finalize_token"] == "tok"
-    parts = finalize_call.kwargs["finalize_upload_request"].parts
-    assert len(parts) == 2
-    assert parts[0].part_number == 1
-    assert parts[1].part_number == 2
+    uploads.return_value.upload_file.assert_called_once_with(
+        "/tmp/data.parquet", content_type="application/octet-stream"
+    )
 
 
-def test_upload_parquet_single_put():
+def test_upload_parquet_surfaces_api_cause_from_upload_error():
+    # SessionCreateError et al. wrap the ApiException as __cause__; the wrapper
+    # must re-raise with that ApiException as the DIRECT cause so
+    # classify_sdk_error keeps seeing the status code.
+    from hotdata.uploads import SessionCreateError
+
     client = _client()
-    data = b"PAR1tiny"
-    session = _session("single", url="https://s/put")
-    finalized = SimpleNamespace(upload_id="upl_single")
+    api_exc = ApiException(status=501)
+    sdk_err = SessionCreateError("opening the upload session failed")
+    sdk_err.__cause__ = api_exc
 
-    with (
-        patch("builtins.open", mock_open(read_data=data)),
-        patch("os.path.getsize", return_value=len(data)),
-        patch.object(client, "uploads") as uploads,
-        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
-    ):
-        pool = MockPool.return_value
-        pool.request.return_value = _http_resp()
-        pool.clear.return_value = None
-        uploads.return_value.create_upload_session_handler.return_value = session
-        uploads.return_value.finalize_upload_handler.return_value = finalized
-
-        upload_id = client.upload_parquet("/tmp/data.parquet")
-
-    assert upload_id == "upl_single"
-    pool.request.assert_called_once()
-    call_args = pool.request.call_args
-    assert call_args.args[0] == "PUT"
-    assert call_args.args[1] == "https://s/put"
-
-
-def test_upload_parquet_raises_on_501():
-    client = _client()
-
-    with (
-        patch("builtins.open", mock_open(read_data=b"PAR1")),
-        patch("os.path.getsize", return_value=4),
-        patch.object(client, "uploads") as uploads,
-    ):
-        err = ApiException(status=501)
-        uploads.return_value.create_upload_session_handler.side_effect = err
-
-        with pytest.raises(RuntimeError, match="presigned uploads"):
+    with patch.object(client, "uploads") as uploads:
+        uploads.return_value.upload_file.side_effect = sdk_err
+        with pytest.raises(RuntimeError) as exc_info:
             client.upload_parquet("/tmp/data.parquet")
 
-    uploads.return_value.upload_file.assert_not_called()
+    assert exc_info.value.__cause__ is api_exc
 
 
-def test_upload_parquet_multipart_reads_are_part_size_bounded():
-    """The OOM fix: multipart mode must never read more than part_size at once."""
+def test_upload_parquet_wraps_plain_upload_error():
+    from hotdata.uploads import StorageError
+
     client = _client()
-    part_size = 5
-    data = b"PAR1" + b"\x00" * 9  # 13 bytes -> parts of 5, 5, 3
-    read_sizes: list[int] = []
+    sdk_err = StorageError(status=503, part_number=3, body="upstream unavailable")
 
-    class _TrackingFile(io.BytesIO):
-        def read(self, n=-1):
-            read_sizes.append(n)
-            return super().read(n)
+    with patch.object(client, "uploads") as uploads:
+        uploads.return_value.upload_file.side_effect = sdk_err
+        with pytest.raises(RuntimeError, match="503"):
+            client.upload_parquet("/tmp/data.parquet")
 
-    bio = _TrackingFile(data)
-    handle = MagicMock()
-    handle.__enter__ = lambda s: bio
-    handle.__exit__ = MagicMock(return_value=False)
-    session = _session(
-        "multipart", part_size=part_size, part_urls=["https://s/1", "https://s/2", "https://s/3"]
+
+def test_classify_501_is_terminal():
+    from hotdata_framework.errors import (
+        HotdataTerminalError,
+        HotdataTransientError,
+        classify_sdk_error,
     )
-    finalized = SimpleNamespace(upload_id="upl_final")
 
-    with (
-        patch("builtins.open", MagicMock(return_value=handle)),
-        patch("os.path.getsize", return_value=len(data)),
-        patch.object(client, "uploads") as uploads,
-        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
-    ):
-        pool = MockPool.return_value
-        pool.request.return_value = _http_resp()
-        pool.clear.return_value = None
-        uploads.return_value.create_upload_session_handler.return_value = session
-        uploads.return_value.finalize_upload_handler.return_value = finalized
-
-        client.upload_parquet("/tmp/data.parquet")
-
-    assert read_sizes, "expected chunked reads"
-    assert all(n == part_size for n in read_sizes)
+    assert isinstance(classify_sdk_error(ApiException(status=501)), HotdataTerminalError)
+    # The rest of 5xx stays transient.
+    assert isinstance(classify_sdk_error(ApiException(status=503)), HotdataTransientError)
 
 
 def test_load_managed_table_with_upload_id():

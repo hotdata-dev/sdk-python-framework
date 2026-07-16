@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.7.3] - 2026-07-16
+
+### Changed
+
+- `upload_parquet()` now delegates to the SDK's `hotdata.uploads.UploadsApi.upload_file()` instead of hand-rolling the session → PUT → finalize flow. Uploads gain concurrent part PUTs under a peak-memory budget, per-part retries, and ETag/size validation, making large uploads substantially faster. Errors still surface as `RuntimeError` with the underlying `ApiException` as the direct cause.
+
+### Fixed
+
+- `classify_sdk_error` now classifies HTTP 501 (Not Implemented) as terminal instead of transient — a permanent capability gap must not burn retries.
+
 ## [0.7.2] - 2026-07-15
 
 ### Removed
