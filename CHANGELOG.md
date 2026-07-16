@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.7.1] - 2026-07-15
+
+### Changed
+
+- `upload_parquet()` now uses the presigned upload session API (`POST /v1/uploads`) instead of reading the entire file into memory before uploading. For multipart mode the file is streamed one `part_size` chunk at a time, eliminating the memory spike that caused OOM on large Parquet files. Falls back to `POST /v1/files` when the server returns 501.
+
 ## [0.7.0] - 2026-07-14
 
 ### Added

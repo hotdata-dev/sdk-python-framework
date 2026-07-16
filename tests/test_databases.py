@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import io
 from types import SimpleNamespace
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 from hotdata.exceptions import ApiException
@@ -194,16 +195,105 @@ def test_upload_parquet_rejects_non_parquet():
         client.upload_parquet("/tmp/data.csv")
 
 
-def test_upload_parquet_returns_upload_id():
+def _mock_open_bytes(data: bytes) -> MagicMock:
+    """Return an open() mock whose file handle supports read(n) via BytesIO."""
+    bio = io.BytesIO(data)
+    m = MagicMock()
+    m.__enter__ = lambda s: bio
+    m.__exit__ = MagicMock(return_value=False)
+    return MagicMock(return_value=m)
+
+
+def _session(mode: str, **kw) -> SimpleNamespace:
+    defaults = dict(
+        upload_id="upl_sess",
+        finalize_token="tok",
+        headers={},
+        part_size=None,
+        part_urls=None,
+        url=None,
+    )
+    return SimpleNamespace(mode=mode, **{**defaults, **kw})
+
+
+def _http_resp(status: int = 200, etag: str = '"abc"') -> SimpleNamespace:
+    return SimpleNamespace(status=status, headers={"ETag": etag})
+
+
+def test_upload_parquet_multipart():
     client = _client()
-    uploaded = SimpleNamespace(id="upl_123")
+    data = b"PAR1" + b"\x00" * 6  # 10 bytes -> 2 parts of 5
+    session = _session("multipart", part_size=5, part_urls=["https://s/1", "https://s/2"])
+    finalized = SimpleNamespace(upload_id="upl_final")
+
+    with (
+        patch("builtins.open", _mock_open_bytes(data)),
+        patch("os.path.getsize", return_value=len(data)),
+        patch.object(client, "uploads") as uploads,
+        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
+    ):
+        pool = MockPool.return_value
+        pool.request.return_value = _http_resp()
+        pool.clear.return_value = None
+        uploads.return_value.create_upload_session_handler.return_value = session
+        uploads.return_value.finalize_upload_handler.return_value = finalized
+
+        upload_id = client.upload_parquet("/tmp/data.parquet")
+
+    assert upload_id == "upl_final"
+    assert pool.request.call_count == 2
+    finalize_call = uploads.return_value.finalize_upload_handler.call_args
+    assert finalize_call.kwargs["upload_id"] == "upl_sess"
+    assert finalize_call.kwargs["x_upload_finalize_token"] == "tok"
+    parts = finalize_call.kwargs["finalize_upload_request"].parts
+    assert len(parts) == 2
+    assert parts[0].part_number == 1
+    assert parts[1].part_number == 2
+
+
+def test_upload_parquet_single_put():
+    client = _client()
+    data = b"PAR1tiny"
+    session = _session("single", url="https://s/put")
+    finalized = SimpleNamespace(upload_id="upl_single")
+
+    with (
+        patch("builtins.open", mock_open(read_data=data)),
+        patch("os.path.getsize", return_value=len(data)),
+        patch.object(client, "uploads") as uploads,
+        patch("hotdata_framework.client.urllib3.PoolManager") as MockPool,
+    ):
+        pool = MockPool.return_value
+        pool.request.return_value = _http_resp()
+        pool.clear.return_value = None
+        uploads.return_value.create_upload_session_handler.return_value = session
+        uploads.return_value.finalize_upload_handler.return_value = finalized
+
+        upload_id = client.upload_parquet("/tmp/data.parquet")
+
+    assert upload_id == "upl_single"
+    pool.request.assert_called_once()
+    call_args = pool.request.call_args
+    assert call_args.args[0] == "PUT"
+    assert call_args.args[1] == "https://s/put"
+
+
+def test_upload_parquet_fallback_on_501():
+    client = _client()
+    uploaded = SimpleNamespace(id="upl_post")
+
     with (
         patch("builtins.open", mock_open(read_data=b"PAR1")),
+        patch("os.path.getsize", return_value=4),
         patch.object(client, "uploads") as uploads,
     ):
+        err = ApiException(status=501)
+        uploads.return_value.create_upload_session_handler.side_effect = err
         uploads.return_value.upload_file.return_value = uploaded
+
         upload_id = client.upload_parquet("/tmp/data.parquet")
-    assert upload_id == "upl_123"
+
+    assert upload_id == "upl_post"
 
 
 def test_load_managed_table_with_upload_id():
