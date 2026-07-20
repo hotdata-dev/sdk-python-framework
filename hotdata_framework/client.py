@@ -340,6 +340,7 @@ class HotdataClient:
         upload_id: str | None = None,
         file: str | None = None,
         mode: ManagedLoadMode = "replace",
+        key: list[str] | None = None,
     ) -> LoadManagedTableResult:
         if (upload_id is None) == (file is None):
             raise ValueError("Exactly one of upload_id or file is required")
@@ -352,6 +353,7 @@ class HotdataClient:
         request = LoadManagedTableRequest(
             mode=mode,
             upload_id=resolved_upload_id,
+            key=key,
         )
         try:
             loaded = self.connections().load_managed_table(
