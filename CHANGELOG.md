@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.8.0] - 2026-07-20
+
 ### Changed
 
 - `load_managed_table` accepts a `key` argument — the merge key columns for
   `delete`/`update`/`upsert` loads, matched per-load instead of requiring a key
   declared at table creation. Omit it to use the table's declared key; ignored
   for `replace`/`append`. Requires `hotdata>=0.8.0`.
-
 
 ## [0.7.3] - 2026-07-16
 
