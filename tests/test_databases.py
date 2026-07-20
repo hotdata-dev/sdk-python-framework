@@ -308,6 +308,16 @@ def test_load_managed_table_defaults_to_replace():
     assert _load_and_capture_request(_client()).mode == "replace"
 
 
+def test_load_managed_table_passes_key():
+    request = _load_and_capture_request(_client(), mode="delete", key=["id"])
+    assert request.mode == "delete"
+    assert request.key == ["id"]
+
+
+def test_load_managed_table_key_defaults_to_none():
+    assert _load_and_capture_request(_client()).key is None
+
+
 @pytest.mark.parametrize("mode", ["append", "delete", "update", "upsert"])
 def test_load_managed_table_forwards_mode(mode: str):
     assert _load_and_capture_request(_client(), mode=mode).mode == mode

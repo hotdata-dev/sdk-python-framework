@@ -205,10 +205,15 @@ class ManagedDatabaseClient:
         schema: str,
         upload_id: str,
         mode: ManagedLoadMode = "replace",
+        key: list[str] | None = None,
     ) -> LoadManagedTableResult:
         # append is the only non-idempotent mode: if the server commits the load
         # but the response is lost, a retry re-appends the same rows. Run it
         # at-most-once; every other mode is safe to retry.
+        #
+        # `key` is the merge key for delete/update/upsert loads: when set it is
+        # matched per-load instead of a key declared at table creation. Omit it
+        # to use the table's declared key. Ignored for replace/append.
         return self._request_with_retry(
             lambda: self._runtime.load_managed_table(
                 database,
@@ -216,6 +221,7 @@ class ManagedDatabaseClient:
                 schema=schema,
                 upload_id=upload_id,
                 mode=mode,
+                key=key,
             ),
             retryable=(mode != "append"),
         )

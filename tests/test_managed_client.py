@@ -163,7 +163,13 @@ def _load_recording_runtime(calls: list[str]) -> SimpleNamespace:
     with a transient error, so retry behaviour is observable via ``calls``."""
 
     def load_managed_table(
-        database: str, table: str, *, schema: str, upload_id: str, mode: str
+        database: str,
+        table: str,
+        *,
+        schema: str,
+        upload_id: str,
+        mode: str,
+        key: list[str] | None = None,
     ) -> SimpleNamespace:
         calls.append(mode)
         raise TimeoutError("commit succeeded but response was lost")
@@ -209,3 +215,34 @@ def test_idempotent_load_retries_on_transient(monkeypatch: pytest.MonkeyPatch) -
         client.load_managed_table("db", "orders", schema="public", upload_id="u1", mode="replace")
 
     assert calls == ["replace", "replace", "replace"]  # retried up to max_retries
+
+
+def test_load_managed_table_forwards_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A per-load ``key`` is passed straight through to the runtime client."""
+    monkeypatch.setattr(mc.time, "sleep", lambda _seconds: None)
+    captured: dict[str, Any] = {}
+
+    def load_managed_table(
+        database: str,
+        table: str,
+        *,
+        schema: str,
+        upload_id: str,
+        mode: str,
+        key: list[str] | None = None,
+    ) -> SimpleNamespace:
+        captured["mode"] = mode
+        captured["key"] = key
+        return SimpleNamespace(
+            connection_id="c", schema_name=schema, table_name=table, row_count=0
+        )
+
+    client = _managed_client(max_retries=1)
+    runtime = _fake_runtime()
+    runtime.load_managed_table = load_managed_table
+    client._runtime = runtime
+
+    client.load_managed_table(
+        "db", "orders", schema="public", upload_id="u1", mode="delete", key=["id"]
+    )
+    assert captured == {"mode": "delete", "key": ["id"]}
