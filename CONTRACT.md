@@ -56,13 +56,14 @@ Adapters should import from `hotdata_framework` and treat this surface as the st
   adapters should pass `connection_id` when known.
 - `uploads()` returns the uploads API wrapper for parquet staging.
 - `list_managed_databases()` returns all databases via the `/databases` API.
-- `resolve_managed_database(name_or_id)` resolves a database by id (direct lookup) or description (list scan).
-- `create_managed_database(description=..., schema=..., tables=..., expires_at=...)` creates a database via the `/databases` API and optionally declares tables up front.
+- `resolve_managed_database(name_or_id)` resolves a database by id (direct lookup) or description (list scan). A `403` from `/databases` surfaces as `RuntimeError` (forbidden, not absent), preserving the underlying `ApiException` as `__cause__`.
+- `create_managed_database(description=..., schema=..., tables=..., expires_at=...)` creates a database via the `/databases` API and optionally declares tables up front. Returns a `ManagedDatabase` (id + `default_connection_id`) sufficient to load without a further read.
 - `delete_managed_database(name_or_id)` deletes a database via the `/databases` API.
 - `list_managed_tables(database, schema=...)` lists tables in a managed database.
 - `upload_parquet(path)` uploads a local parquet file and returns an upload id.
 - `load_managed_table(database, table, schema=..., upload_id=..., file=...)` publishes parquet data into a declared managed table.
 - `delete_managed_table(database, table, schema=...)` deletes a managed table.
+- The `database` argument of `list_managed_tables`, `load_managed_table`, `add_managed_table`, `delete_managed_table`, `delete_managed_database`, and `execute_sql` accepts a name/id **or** an already-resolved `ManagedDatabase`. Passing a `ManagedDatabase` skips the name/id read probe, so a create-scoped key that cannot read `/databases` can load into a database it just created.
 
 ### `QueryResult`
 

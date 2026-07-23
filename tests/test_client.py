@@ -4,9 +4,132 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from hotdata.exceptions import ForbiddenException
 
 from hotdata_framework.client import HotdataClient
+from hotdata_framework.databases import ManagedDatabase
 from hotdata_framework.env import normalize_host, pick_workspace, resolve_workspace_selection
+
+
+class _ForbiddenDatabasesApi:
+    """A `/databases` API that a create-scoped key would see: every read is 403,
+    while the declare-table write succeeds. Counts reads so tests can assert none
+    happened."""
+
+    def __init__(self) -> None:
+        self.read_calls = 0
+        self.add_calls: list[tuple[str, str, str]] = []
+
+    def get_database(self, database_id: str):
+        self.read_calls += 1
+        raise ForbiddenException(status=403)
+
+    def list_databases(self):
+        self.read_calls += 1
+        raise ForbiddenException(status=403)
+
+    def add_database_table(self, database_id, var_schema, request):
+        self.add_calls.append((database_id, var_schema, request.name))
+        return SimpleNamespace(
+            connection_id="conn", var_schema=var_schema, table=request.name
+        )
+
+
+class _FakeConnectionsApi:
+    def __init__(self) -> None:
+        self.load_calls: list[tuple[str, str, str]] = []
+
+    def load_managed_table(self, connection_id, schema, table, request):
+        self.load_calls.append((connection_id, schema, table))
+        return SimpleNamespace(
+            connection_id=connection_id,
+            schema_name=schema,
+            table_name=table,
+            row_count=3,
+        )
+
+
+def test_load_managed_table_with_object_skips_read_probe():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    db = ManagedDatabase(id="db_1", description="mydb", default_connection_id="conn_1")
+    databases = _ForbiddenDatabasesApi()
+    connections = _FakeConnectionsApi()
+
+    with (
+        patch.object(client, "_databases_api", return_value=databases),
+        patch.object(client, "connections", return_value=connections),
+    ):
+        result = client.load_managed_table(db, "orders", schema="public", upload_id="up_1")
+
+    assert databases.read_calls == 0
+    assert connections.load_calls == [("conn_1", "public", "orders")]
+    assert result.full_name == "db_1.public.orders"
+    assert result.row_count == 3
+
+
+def test_add_managed_table_with_object_skips_read_probe():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    db = ManagedDatabase(id="db_1", description="mydb", default_connection_id="conn_1")
+    databases = _ForbiddenDatabasesApi()
+
+    with patch.object(client, "_databases_api", return_value=databases):
+        result = client.add_managed_table(db, "orders", schema="public")
+
+    assert databases.read_calls == 0
+    assert databases.add_calls == [("db_1", "public", "orders")]
+    assert result.full_name == "db_1.public.orders"
+
+
+def test_execute_sql_with_object_skips_read_probe():
+    from hotdata.models.query_response import QueryResponse as _QR
+
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    db = ManagedDatabase(id="db_abc", description="mydb", default_connection_id="conn_1")
+    databases = _ForbiddenDatabasesApi()
+
+    class FakeQueryApi:
+        def __init__(self):
+            self.calls: list[dict] = []
+
+        def query(self, request, **kwargs):
+            self.calls.append(kwargs)
+            return _QR(
+                columns=["n"],
+                rows=[[1]],
+                row_count=1,
+                preview_row_count=1,
+                truncated=False,
+                nullable=[False],
+                result_id="res_1",
+                query_run_id="qrun_1",
+                execution_time_ms=1,
+            )
+
+    fake_q = FakeQueryApi()
+    with (
+        patch.object(client, "_query_api", return_value=fake_q),
+        patch.object(client, "_databases_api", return_value=databases),
+    ):
+        client.execute_sql("SELECT 1", database=db)
+
+    assert databases.read_calls == 0
+    assert fake_q.calls == [{"x_database_id": "db_abc"}]
+
+
+def test_load_managed_table_with_name_still_resolves():
+    client = HotdataClient("k", "ws", host="https://api.hotdata.dev")
+    connections = _FakeConnectionsApi()
+    resolved = ManagedDatabase(id="db_1", description="mydb", default_connection_id="conn_1")
+
+    with (
+        patch.object(client, "resolve_managed_database", return_value=resolved) as resolve,
+        patch.object(client, "connections", return_value=connections),
+    ):
+        result = client.load_managed_table("mydb", "orders", schema="public", upload_id="up_1")
+
+    resolve.assert_called_once_with("mydb")
+    assert connections.load_calls == [("conn_1", "public", "orders")]
+    assert result.full_name == "db_1.public.orders"
 
 
 def _clear_workspace_env(monkeypatch: pytest.MonkeyPatch) -> None:
