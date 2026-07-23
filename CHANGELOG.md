@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.9.0] - 2026-07-23
+
+### Added
+
+- `list_managed_tables`, `load_managed_table`, `add_managed_table`,
+  `delete_managed_table`, `delete_managed_database`, and `execute_sql` accept an
+  already-resolved `ManagedDatabase` (as returned by `create_managed_database`)
+  in place of a name/id. When passed one, they skip the `get_database` /
+  `list_databases` read probe. This lets an API key scoped to create + load but
+  not read `/databases` bootstrap a managed database and load into it within a
+  single run: the caller holds the `ManagedDatabase` from `create` and drives
+  the load/add/query ops with zero reads. The name/id string path is unchanged.
+
 ## [0.8.0] - 2026-07-20
 
 ### Changed

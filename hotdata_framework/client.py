@@ -241,6 +241,19 @@ class HotdataClient:
             raise RuntimeError(api_error_message(e)) from e
         return managed_database_from_detail(detail)
 
+    def _as_managed_database(self, database: str | ManagedDatabase) -> ManagedDatabase:
+        """Return ``database`` as-is if it is already a resolved ``ManagedDatabase``,
+        otherwise resolve it by name or id.
+
+        Passing an already-resolved ``ManagedDatabase`` (e.g. the value returned by
+        :meth:`create_managed_database`) skips the id/name read probe, so callers
+        whose API key may create but not read ``/databases`` can drive loads without
+        a forbidden read.
+        """
+        if isinstance(database, ManagedDatabase):
+            return database
+        return self.resolve_managed_database(database)
+
     def create_managed_database(
         self,
         description: str | None = None,
@@ -275,8 +288,8 @@ class HotdataClient:
             raise RuntimeError(api_error_message(e)) from e
         return managed_database_from_detail(created)
 
-    def delete_managed_database(self, name_or_id: str) -> None:
-        db = self.resolve_managed_database(name_or_id)
+    def delete_managed_database(self, name_or_id: str | ManagedDatabase) -> None:
+        db = self._as_managed_database(name_or_id)
         try:
             self._databases_api().delete_database(db.id)
         except ApiException as e:
@@ -284,11 +297,11 @@ class HotdataClient:
 
     def list_managed_tables(
         self,
-        database: str,
+        database: str | ManagedDatabase,
         *,
         schema: str | None = None,
     ) -> list[ManagedTable]:
-        db = self.resolve_managed_database(database)
+        db = self._as_managed_database(database)
         rows: list[ManagedTable] = []
         for t in self.iter_tables(connection_id=db.default_connection_id):
             if schema is not None and t.var_schema != schema:
@@ -333,7 +346,7 @@ class HotdataClient:
 
     def load_managed_table(
         self,
-        database: str,
+        database: str | ManagedDatabase,
         table: str,
         *,
         schema: str = DEFAULT_SCHEMA,
@@ -344,7 +357,7 @@ class HotdataClient:
     ) -> LoadManagedTableResult:
         if (upload_id is None) == (file is None):
             raise ValueError("Exactly one of upload_id or file is required")
-        db = self.resolve_managed_database(database)
+        db = self._as_managed_database(database)
         if upload_id is not None:
             resolved_upload_id = upload_id
         else:
@@ -374,7 +387,7 @@ class HotdataClient:
 
     def add_managed_table(
         self,
-        database: str,
+        database: str | ManagedDatabase,
         table: str,
         *,
         schema: str = DEFAULT_SCHEMA,
@@ -387,7 +400,7 @@ class HotdataClient:
         schema after creation without recreating it. ``key`` sets the
         row-identity columns for delete/update/upsert; omit for keyless.
         """
-        db = self.resolve_managed_database(database)
+        db = self._as_managed_database(database)
         request = AddManagedTableRequest(name=table, key=list(key or []))
         try:
             self._databases_api().add_database_table(db.id, schema, request)
@@ -403,12 +416,12 @@ class HotdataClient:
 
     def delete_managed_table(
         self,
-        database: str,
+        database: str | ManagedDatabase,
         table: str,
         *,
         schema: str = DEFAULT_SCHEMA,
     ) -> None:
-        db = self.resolve_managed_database(database)
+        db = self._as_managed_database(database)
         try:
             self.connections().delete_managed_table(db.default_connection_id, schema, table)
         except ApiException as e:
@@ -569,16 +582,19 @@ class HotdataClient:
             f"(last status: {getattr(last, 'status', None)})"
         )
 
-    def execute_sql(self, sql: str, *, database: str | None = None) -> QueryResult:
+    def execute_sql(
+        self, sql: str, *, database: str | ManagedDatabase | None = None
+    ) -> QueryResult:
         """Execute SQL and return a :class:`QueryResult`.
 
-        Pass ``database`` to scope the query to a managed database.  The name
-        is resolved to a database ID once before the retry loop, and the
+        Pass ``database`` to scope the query to a managed database.  A name or
+        id is resolved to a database ID once before the retry loop; an
+        already-resolved ``ManagedDatabase`` is used as-is (no read probe).  The
         ``X-Database-Id`` header is sent with every attempt.  Inside a managed
         database the built-in catalog is always ``"default"``, so table
         references should use ``"default"."<schema>"."<table>"``.
         """
-        database_id = self.resolve_managed_database(database).id if database else None
+        database_id = self._as_managed_database(database).id if database else None
         last_err: BaseException | None = None
         for attempt in range(3):
             try:
