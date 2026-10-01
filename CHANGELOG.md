@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Release 0.14.1
+- Allow `hotdata>=0.9.0,<0.12` (was `<0.10`).
 
 ## [0.14.0] - 2026-09-01
 
