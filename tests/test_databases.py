@@ -66,7 +66,7 @@ def test_list_managed_databases_returns_all():
     client = _client()
     summary = SimpleNamespace(id="db_1")
     detail = _detail()
-    listing = SimpleNamespace(databases=[summary])
+    listing = SimpleNamespace(databases=[summary], has_more=False, next_cursor=None)
     with patch.object(client, "_databases_api") as dbs:
         dbs.return_value.list_databases.return_value = listing
         dbs.return_value.get_database.return_value = detail
@@ -80,7 +80,7 @@ def test_list_managed_databases_skips_failed_gets():
     client = _client()
     summaries = [SimpleNamespace(id="db_1"), SimpleNamespace(id="db_2")]
     detail = _detail(id="db_2", description="warehouse", default_connection_id="conn_2")
-    listing = SimpleNamespace(databases=summaries)
+    listing = SimpleNamespace(databases=summaries, has_more=False, next_cursor=None)
     with patch.object(client, "_databases_api") as dbs:
         dbs.return_value.list_databases.return_value = listing
         dbs.return_value.get_database.side_effect = [
@@ -105,7 +105,7 @@ def test_resolve_managed_database_by_id():
 def test_resolve_managed_database_by_description():
     client = _client()
     summary = SimpleNamespace(id="db_1", name="sales")
-    listing = SimpleNamespace(databases=[summary])
+    listing = SimpleNamespace(databases=[summary], has_more=False, next_cursor=None)
     detail = _detail()
     with patch.object(client, "_databases_api") as dbs:
         dbs.return_value.get_database.side_effect = [
@@ -119,12 +119,58 @@ def test_resolve_managed_database_by_description():
 
 def test_resolve_managed_database_not_found():
     client = _client()
-    listing = SimpleNamespace(databases=[])
+    listing = SimpleNamespace(databases=[], has_more=False, next_cursor=None)
     with patch.object(client, "_databases_api") as dbs:
         dbs.return_value.get_database.side_effect = ApiException(status=404, reason="not found")
         dbs.return_value.list_databases.return_value = listing
         with pytest.raises(KeyError, match="no-such"):
             client.resolve_managed_database("no-such")
+
+
+def _pages(*pages):
+    """Listing responses for consecutive pages, linked by cursor."""
+    return [
+        SimpleNamespace(
+            databases=databases,
+            has_more=i < len(pages) - 1,
+            next_cursor=f"cursor_{i + 1}" if i < len(pages) - 1 else None,
+        )
+        for i, databases in enumerate(pages)
+    ]
+
+
+def test_list_managed_databases_reads_every_page():
+    client = _client()
+    pages = _pages([SimpleNamespace(id="db_1")], [SimpleNamespace(id="db_2")])
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.list_databases.side_effect = pages
+        dbs.return_value.get_database.side_effect = [
+            _detail(id="db_1"),
+            _detail(id="db_2", description="warehouse"),
+        ]
+        result = client.list_managed_databases()
+        cursors = [c.kwargs["cursor"] for c in dbs.return_value.list_databases.call_args_list]
+    assert [db.id for db in result] == ["db_1", "db_2"]
+    assert cursors == [None, "cursor_1"]
+
+
+def test_resolve_managed_database_by_name_on_a_later_page():
+    client = _client()
+    pages = _pages(
+        [SimpleNamespace(id="db_9", name="sales-archive")],
+        [SimpleNamespace(id="db_1", name="sales")],
+    )
+    with patch.object(client, "_databases_api") as dbs:
+        dbs.return_value.get_database.side_effect = [
+            ApiException(status=404, reason="not found"),
+            _detail(),
+        ]
+        dbs.return_value.list_databases.side_effect = pages
+        db = client.resolve_managed_database("sales")
+        searches = {c.kwargs["search"] for c in dbs.return_value.list_databases.call_args_list}
+    assert db.id == "db_1"
+    assert dbs.return_value.get_database.call_args_list[-1].args == ("db_1",)
+    assert searches == {"sales"}
 
 
 def test_create_managed_database_returns_summary():

@@ -22,6 +22,7 @@ from hotdata.models.create_database_request import CreateDatabaseRequest
 from hotdata.models.create_index_request import CreateIndexRequest
 from hotdata.models.database_default_schema_decl import DatabaseDefaultSchemaDecl
 from hotdata.models.database_default_table_decl import DatabaseDefaultTableDecl
+from hotdata.models.database_summary import DatabaseSummary
 from hotdata.models.index_info_response import IndexInfoResponse
 from hotdata.models.job_status_response import JobStatusResponse
 from hotdata.models.load_managed_table_request import LoadManagedTableRequest
@@ -276,10 +277,20 @@ class HotdataClient:
     def uploads(self) -> UploadsApi:
         return UploadsApi(self._api)
 
+    def _iter_database_summaries(self, *, search: str | None = None) -> Iterator[DatabaseSummary]:
+        """Yield every database, newest first, following ``next_cursor`` until
+        ``has_more`` is false. ``search`` keeps only names containing that text."""
+        cursor: str | None = None
+        while True:
+            listing = self._databases_api().list_databases(cursor=cursor, search=search)
+            yield from listing.databases
+            if not listing.has_more or not listing.next_cursor:
+                break
+            cursor = listing.next_cursor
+
     def list_managed_databases(self) -> list[ManagedDatabase]:
-        listing = self._databases_api().list_databases()
         result: list[ManagedDatabase] = []
-        for summary in listing.databases:
+        for summary in self._iter_database_summaries():
             try:
                 detail = self._databases_api().get_database(summary.id)
                 result.append(managed_database_from_detail(detail))
@@ -296,10 +307,10 @@ class HotdataClient:
             if e.status != 404:
                 raise RuntimeError(api_error_message(e)) from e
 
-        # Fall back to description-based lookup
-        listing = self._databases_api().list_databases()
+        # Fall back to a name lookup. `search` only narrows the listing (it is a
+        # case-insensitive substring filter), so the name must still match exactly.
         match_id: str | None = None
-        for db in listing.databases:
+        for db in self._iter_database_summaries(search=name_or_id):
             if db.name == name_or_id:
                 match_id = db.id
                 break

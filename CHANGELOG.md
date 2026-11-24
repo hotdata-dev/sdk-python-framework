@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `list_managed_databases()` returns every database instead of only the first page of 100, and `resolve_managed_database()` finds a database by name on any page instead of raising `KeyError`.
 
 
 ## [0.14.1] - 2026-10-01
